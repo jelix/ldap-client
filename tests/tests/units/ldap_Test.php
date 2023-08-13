@@ -1,0 +1,200 @@
+<?php
+/**
+ * @author      laurent Jouanneau
+ * @copyright   2019-2023 laurent Jouanneau
+ * @link        https://www.jelix.org
+ * @licence     MIT
+ */
+use Jelix\Ldap\Ldap;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Tests ldap library
+ */
+class ldap_Test  extends TestCase {
+
+    protected $ldapPort = 389;
+
+    protected $ldapTlsMode = '';
+
+    protected $ldapProfileName = 'lpldap';
+
+    protected $ldapProfile = array(
+        'hostname'      =>  'ldap.jelix',
+        'tlsMode'       => 'starttls',
+        'port'          =>  389,
+        //'tlsMode'       => 'ldaps',
+        //'port'          =>  636,
+        'adminUserDn'      =>  'cn=admin,dc=tests,dc=jelix',
+        'adminPassword'      =>  'passjelix',
+        'searchUserBaseDN' => 'ou=people,dc=tests,dc=jelix',
+        'searchUserFilter' => "(&(objectClass=inetOrgPerson)(uid=%%LOGIN%%))",
+        'bindUserDN' => "uid=%?%,ou=people,dc=tests,dc=jelix",
+        'newUserDN' => "uid=%%LOGIN%%,ou=people,dc=tests,dc=jelix",
+        'newUserLdapAttributes' => "objectClass:inetOrgPerson,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%",
+        'searchAttributes' => "uid:login,displayName:realname,mail:email",
+    );
+
+    function testUserExists() {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = '';
+        $ldap = new Ldap($config);
+
+        $this->assertTrue($ldap->userExists('john'));
+        $this->assertFalse($ldap->userExists('johnny'));
+    }
+
+    function testUserExistsStartTls() {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'starttls';
+        $ldap = new Ldap($config);
+
+        $this->assertTrue($ldap->userExists('john'));
+        $this->assertFalse($ldap->userExists('johnny'));
+    }
+
+    function testUserExistsLdaps() {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'ldaps';
+        $config['port'] = 636;
+
+        $ldap = new Ldap($config);
+
+        $this->assertTrue($ldap->userExists('john'));
+        $this->assertFalse($ldap->userExists('johnny'));
+    }
+
+    function testGetUser()
+    {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'ldaps';
+        $config['port'] = 636;
+
+        $ldap = new Ldap($config);
+        $ldapAttr = $ldap->getUser('john');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=john,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'john',
+            'displayName' => 'John Doe',
+            'mail' => 'john@jelix.org',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'john',
+            'realname' => 'John Doe',
+            'email' => 'john@jelix.org',
+        ), $ldapAttr->userAttributes);
+    }
+
+
+    function testVerifyPassword() {
+        $ldap = new Ldap($this->ldapProfile);
+        $ldapAttr = $ldap->verifyAuthentication('john', 'passjohn');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=john,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'john',
+            'displayName' => 'John Doe',
+            'mail' => 'john@jelix.org',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'john',
+            'realname' => 'John Doe',
+            'email' => 'john@jelix.org',
+        ), $ldapAttr->userAttributes);
+    }
+
+    function testCreateUser() {
+        $ldap = new Ldap($this->ldapProfile);
+        $this->assertTrue($ldap->createUser('testldap', 'passrobert', 'robert@tests.jelix', 'Robert Dupont'));
+        $this->assertTrue($ldap->userExists('testldap'));
+        $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'testldap',
+            'displayName' => 'Robert Dupont',
+            'mail' => 'robert@tests.jelix',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'testldap',
+            'realname' => 'Robert Dupont',
+            'email' => 'robert@tests.jelix',
+        ), $ldapAttr->userAttributes);
+
+    }
+
+    /**
+     * @depends testCreateUser
+     */
+    function testChangePassword() {
+        $ldap = new Ldap($this->ldapProfile);
+        $this->assertTrue($ldap->changePassword('testldap', 'passrobert2'));
+        $this->assertTrue($ldap->userExists('testldap'));
+        $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
+        $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert2');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'testldap',
+            'displayName' => 'Robert Dupont',
+            'mail' => 'robert@tests.jelix',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'testldap',
+            'realname' => 'Robert Dupont',
+            'email' => 'robert@tests.jelix',
+        ), $ldapAttr->userAttributes);
+
+    }
+
+    /**
+     * @throws \Jelix\Ldap\Exception
+     * @depends testChangePassword
+     */
+    function testChangeHashedPassword() {
+        $config = $this->ldapProfile;
+        $config['passwordLdapHashAlgo'] = 'SSHA';
+        $ldap = new Ldap($config);
+        $this->assertTrue($ldap->changePassword('testldap', 'passroberthashed'));
+        $this->assertTrue($ldap->userExists('testldap'));
+        $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
+        $ldapAttr = $ldap->verifyAuthentication('testldap', 'passroberthashed');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'testldap',
+            'displayName' => 'Robert Dupont',
+            'mail' => 'robert@tests.jelix',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'testldap',
+            'realname' => 'Robert Dupont',
+            'email' => 'robert@tests.jelix',
+        ), $ldapAttr->userAttributes);
+    }
+
+
+
+    /**
+     * @depends testChangePassword
+     */
+    function testDeleteUser() {
+        $ldap = new Ldap($this->ldapProfile);
+        $ldapAttr = $ldap->deleteUser('testldap');
+        $this->assertIsObject($ldapAttr);
+        $this->assertTrue($ldap->deleteUser('testldap'));
+        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'testldap',
+            'displayName' => 'Robert Dupont',
+            'mail' => 'robert@tests.jelix',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'testldap',
+            'realname' => 'Robert Dupont',
+            'email' => 'robert@tests.jelix',
+        ), $ldapAttr->userAttributes);
+        $this->assertFalse($ldap->userExists('testldap'));
+    }
+}

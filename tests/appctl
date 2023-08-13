@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+COMMAND="$1"
+shift
+
+if [ "$COMMAND" == "" ]; then
+    echo "Error: command is missing"
+    echo "Possible commands: clean_tmp, reset, install, rights, composer-install, composer-update"
+    echo " unit-tests,  shell, shellroot"
+    echo " ldapreset, ldapusers"
+    exit 1;
+fi
+
+CONTAINER_PREFIX=jelix_ldap
+
+case $COMMAND in
+    reset)
+        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh reset;;
+    composer-install)
+        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh composer_install;;
+    composer-update)
+        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh composer_update;;
+    unit-tests)
+        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests $@;;
+    shell)
+       docker exec -it --user userphp ${CONTAINER_PREFIX}_php  /bin/bash -l;;
+    shellroot)
+       docker exec -it ${CONTAINER_PREFIX}_php  /bin/bash  -l;;
+    ldapreset)
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh reset
+      ;;
+    ldapusers)
+       docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh showusers
+       ;;
+    ldapshell)
+       docker exec -it ${CONTAINER_PREFIX}_server  /bin/bash -l
+     ;;
+    *)
+        echo "wrong command"
+        exit 2
+        ;;
+esac
+

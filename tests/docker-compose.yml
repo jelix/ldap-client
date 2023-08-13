@@ -1,0 +1,38 @@
+version: '3.4'
+
+services:
+  openldap:
+    build: ./docker-conf/openldap
+    container_name: jelix_ldap_server
+    environment:
+      #SLAPD_FORCE_RECONFIGURE: "true"
+      SLAPD_PASSWORD: "passjelix"
+      SLAPD_ORGANISATION: "Jelix"
+      SLAPD_DOMAIN: "tests.jelix"
+      SLAPD_TLS_CRT_FILENAME: "ldap.jelix.crt"
+      SLAPD_TLS_KEY_FILENAME: "ldap.jelix.key"
+      SLAPD_TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+    volumes:
+      - "./docker-conf/certs:/customcerts"
+      - "./docker-conf/openldap/ldif:/customldif"
+    networks:
+      default:
+        aliases:
+          - ldap.jelix
+  php:
+    build:
+      context: ./docker-conf/phpfpm
+      args:
+        PHP_VERSION: "${PHP_VERSION}"
+    container_name: jelix_ldap_php
+    environment:
+      TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+      APP_USER_ID: ${FPM_USER_ID}
+      APP_GROUP_ID: ${FPM_GROUP_ID}
+      DISPLAY_ERRORS: "on"
+    volumes:
+      - "../:/jelixapp/"
+      - "./docker-conf/certs:/customcerts"
+    depends_on:
+      - openldap
+
