@@ -2,6 +2,14 @@ dn: ou=people,dc=tests,dc=jelix
 objectClass: organizationalUnit
 ou: people
 
+dn: ou=admins,dc=tests,dc=jelix
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=guest,dc=tests,dc=jelix
+objectClass: organizationalUnit
+ou: people
+
 dn: ou=groups,dc=tests,dc=jelix
 objectClass: organizationalUnit
 ou: groups
@@ -26,6 +34,17 @@ displayName: Jane Doe
 userPassword: passjane
 mail: jane@jelix.org
 
+dn: uid=laurent,ou=admins,dc=tests,dc=jelix
+objectClass: inetOrgPerson
+uid: laurent
+givenName: Laurent
+cn: Laurent J
+sn: Laurent J
+displayName: Laurent J
+userPassword: passlaurent
+mail: laurent@jelix.org
+
+
 dn: cn=group1,ou=groups,dc=tests,dc=jelix
 objectClass: groupOfNames
 cn: group1
@@ -37,4 +56,8 @@ objectClass: groupOfNames
 cn: group2
 member: uid=john,ou=people,dc=tests,dc=jelix
 
+dn: cn=admins,ou=groups,dc=tests,dc=jelix
+objectClass: groupOfNames
+cn: admins
+member: uid=laurent,ou=admins,dc=tests,dc=jelix
 

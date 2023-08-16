@@ -27,12 +27,16 @@ class ldap_Test  extends TestCase {
         //'port'          =>  636,
         'adminUserDn'      =>  'cn=admin,dc=tests,dc=jelix',
         'adminPassword'      =>  'passjelix',
-        'searchUserBaseDN' => 'ou=people,dc=tests,dc=jelix',
+        'searchUserBaseDN' => [
+            "ou=people,dc=tests,dc=jelix",
+            "ou=admins,dc=tests,dc=jelix", // for user admin
+            "ou=guest,dc=tests,dc=jelix", // for guest users
+        ],
         'searchUserFilter' => "(&(objectClass=inetOrgPerson)(uid=%%LOGIN%%))",
-        'bindUserDN' => "uid=%?%,ou=people,dc=tests,dc=jelix",
-        'newUserDN' => "uid=%%LOGIN%%,ou=people,dc=tests,dc=jelix",
+        'newUserDN' => "uid=%%LOGIN%%,ou=guest,dc=tests,dc=jelix",
         'newUserLdapAttributes' => "objectClass:inetOrgPerson,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%",
         'searchAttributes' => "uid:login,displayName:realname,mail:email",
+
     );
 
     function testUserExists() {
@@ -64,7 +68,7 @@ class ldap_Test  extends TestCase {
         $this->assertFalse($ldap->userExists('johnny'));
     }
 
-    function testGetUser()
+    function testGetUserOfPeople()
     {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'ldaps';
@@ -87,8 +91,39 @@ class ldap_Test  extends TestCase {
     }
 
 
-    function testVerifyPassword() {
-        $ldap = new Ldap($this->ldapProfile);
+    function testGetUserOfAdmin()
+    {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'ldaps';
+        $config['port'] = 636;
+
+        $config = $this->ldapProfile;
+        //$config['searchUserBaseDN'] = 'ou=admins,dc=tests,dc=jelix';
+        //$config['bindUserDN'] =  "uid=%?%,ou=people,dc=tests,dc=jelix",
+        $ldap = new Ldap($config);
+        $ldapAttr = $ldap->getUser('laurent');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=laurent,ou=admins,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'laurent',
+            'displayName' => 'Laurent J',
+            'mail' => 'laurent@jelix.org',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'laurent',
+            'realname' => 'Laurent J',
+            'email' => 'laurent@jelix.org',
+        ), $ldapAttr->userAttributes);
+    }
+
+
+    function testVerifyPasswordWithJohn()
+    {
+        $config = $this->ldapProfile;
+        $config['searchGroupFilter'] = '(&(objectClass=groupOfNames)(member=%%USERDN%%))';
+        $config['searchGroupProperty'] = 'cn';
+        $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
+        $ldap = new Ldap($config);
         $ldapAttr = $ldap->verifyAuthentication('john', 'passjohn');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('uid=john,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
@@ -102,6 +137,27 @@ class ldap_Test  extends TestCase {
             'realname' => 'John Doe',
             'email' => 'john@jelix.org',
         ), $ldapAttr->userAttributes);
+        $this->assertEquals(array('group1', 'group2'), $ldapAttr->groups);
+    }
+
+
+    function testVerifyPasswordWithLaurent()
+    {
+        $ldap = new Ldap($this->ldapProfile);
+        $ldapAttr = $ldap->verifyAuthentication('laurent', 'passlaurent');
+        $this->assertIsObject($ldapAttr);
+        $this->assertEquals('uid=laurent,ou=admins,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals(array (
+            'uid' => 'laurent',
+            'displayName' => 'Laurent J',
+            'mail' => 'laurent@jelix.org',
+        ), $ldapAttr->ldapAttributes);
+        $this->assertEquals(array (
+            'login' => 'laurent',
+            'realname' => 'Laurent J',
+            'email' => 'laurent@jelix.org',
+        ), $ldapAttr->userAttributes);
+        $this->assertEquals(null, $ldapAttr->groups);
     }
 
     function testCreateUser() {
@@ -110,7 +166,7 @@ class ldap_Test  extends TestCase {
         $this->assertTrue($ldap->userExists('testldap'));
         $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert');
         $this->assertIsObject($ldapAttr);
-        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals('uid=testldap,ou=guest,dc=tests,dc=jelix', $ldapAttr->dn);
         $this->assertEquals(array (
             'uid' => 'testldap',
             'displayName' => 'Robert Dupont',
@@ -134,7 +190,7 @@ class ldap_Test  extends TestCase {
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
         $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert2');
         $this->assertIsObject($ldapAttr);
-        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals('uid=testldap,ou=guest,dc=tests,dc=jelix', $ldapAttr->dn);
         $this->assertEquals(array (
             'uid' => 'testldap',
             'displayName' => 'Robert Dupont',
@@ -161,7 +217,7 @@ class ldap_Test  extends TestCase {
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
         $ldapAttr = $ldap->verifyAuthentication('testldap', 'passroberthashed');
         $this->assertIsObject($ldapAttr);
-        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals('uid=testldap,ou=guest,dc=tests,dc=jelix', $ldapAttr->dn);
         $this->assertEquals(array (
             'uid' => 'testldap',
             'displayName' => 'Robert Dupont',
@@ -184,7 +240,7 @@ class ldap_Test  extends TestCase {
         $ldapAttr = $ldap->deleteUser('testldap');
         $this->assertIsObject($ldapAttr);
         $this->assertTrue($ldap->deleteUser('testldap'));
-        $this->assertEquals('uid=testldap,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
+        $this->assertEquals('uid=testldap,ou=guest,dc=tests,dc=jelix', $ldapAttr->dn);
         $this->assertEquals(array (
             'uid' => 'testldap',
             'displayName' => 'Robert Dupont',

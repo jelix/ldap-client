@@ -67,10 +67,12 @@ class Ldap
             'adminPassword'      =>  null,
             'protocolVersion'   =>  3,
             'searchUserBaseDN' => '',
+            'searchUserFilter' => '',
+            'searchAttributes' => '',
+            'bindAttribute' => 'dn',
             'searchGroupFilter' => '',
             'searchGroupProperty' => '',
             'searchGroupBaseDN' => '',
-            'bindUserDN' => '',
             'newUserDN' => '',
             'passwordLdapHashAlgo' => '',
             'passwordLdapSaltLength' => 5,
@@ -88,8 +90,33 @@ class Ldap
             }
         }
 
-        if ($this->_params['searchUserBaseDN'] == '') {
-            throw new Exception('ldap configuration: search base missing');
+        if (!isset($this->_params['searchUserBaseDN']) || $this->_params['searchUserBaseDN'] == '') {
+            throw new Exception('ldap configuration: base DN for search is missing');
+        }
+
+        if (!is_array($this->_params['searchUserBaseDN'])) {
+            $this->_params['searchUserBaseDN'] = array($this->_params['searchUserBaseDN']);
+        }
+
+        if (!isset($this->_params['searchUserFilter']) || $this->_params['searchUserFilter'] == '') {
+            throw new Exception('ldap configuration: search filter missing');
+        }
+        if (!is_array($this->_params['searchUserFilter'])) {
+            $this->_params['searchUserFilter'] = array($this->_params['searchUserFilter']);
+        }
+
+        $cf = count($this->_params['searchUserFilter']);
+        $cb = count($this->_params['searchUserBaseDN']);
+        if ($cf != $cb) {
+            if ($cf > 1 && $cb > 1) {
+                throw new Exception('ldap configuration: wrong number of searchUserFilter and searchUserBaseDN values');
+            }
+            if ($cf === 1) {
+                $this->_params['searchUserFilter'] = array_fill(0, $cb, $this->_params['searchUserFilter'][0]);
+            }
+            else if ($cb === 1) {
+                $this->_params['searchUserBaseDN'] = array_fill(0, $cf, $this->_params['searchUserBaseDN'][0]);
+            }
         }
 
         if (!isset($this->_params['searchAttributes']) || $this->_params['searchAttributes'] == '') {
@@ -119,20 +146,6 @@ class Ldap
                     $this->_params['newUserLdapAttributes'][trim($attr[0])] = trim($attr[1]);
                 }
             }
-        }
-
-        if (!isset($this->_params['searchUserFilter']) || $this->_params['searchUserFilter'] == '') {
-            throw new Exception('ldap configuration: search filter missing');
-        }
-        if (!is_array($this->_params['searchUserFilter'])) {
-            $this->_params['searchUserFilter'] = array($this->_params['searchUserFilter']);
-        }
-
-        if (!isset($this->_params['bindUserDN']) || $this->_params['bindUserDN'] == '') {
-            throw new Exception('ldap configuration: no bindUserDN config parameter');
-        }
-        if (!is_array($this->_params['bindUserDN'])) {
-            $this->_params['bindUserDN'] = array($this->_params['bindUserDN']);
         }
 
         if ($this->_params['newUserDN'] == '' && $this->_params['featureCreateUser']) {
@@ -396,20 +409,24 @@ class Ldap
             return false;
         }
         // authenticate user. let's try with all configured DN
-        $userDn = $this->bindUser($connect, $attributes, $login, $password);
-        ldap_close($connect);
-
-        if ($userDn === false) {
-            $this->logError('authloginpass ldap: cannot authenticate to ldap with given bindUserDN for the login ' . $login. '. Wrong DN or password');
-            foreach ($this->bindUserDnTries as $erroMessage) {
-                $this->logError($erroMessage);
-            }
+        if ($this->_params['bindAttribute'] == 'dn') {
+            $bindDn = $attributes->dn;
+        }
+        else {
+            $bindDn = $attributes->ldapAttributes[$this->_params['bindAttribute']];
+        }
+        $bind = @ldap_bind($connect, $bindDn, $password);
+        if (!$bind) {
+            $this->logError('ldap authentication: cannot authenticate to ldap with given base DN for the login ' . $login. '. Wrong DN or password');
+            $this->logLdapError($connect, 'tried to connect with "'.$attributes->dn.'"');;
+            ldap_close($connect);
             ldap_close($connectAdmin);
             return false;
         }
+        ldap_close($connect);
 
         // retrieve the user group (if relevant)
-        $this->searchUserGroups($connectAdmin, $userDn, $attributes, $login);
+        $this->searchUserGroups($connectAdmin, $attributes, $login);
         ldap_close($connectAdmin);
 
         return $attributes;
@@ -421,75 +438,32 @@ class Ldap
     protected function searchLdapUserAttributes($connect, $login)
     {
         $searchAttributes = array_keys($this->_params['searchAttributes']);
-        $filters = array();
-        foreach ($this->_params['searchUserFilter'] as $searchUserFilter) {
+        if ($this->_params['bindAttribute'] != 'dn' && !isset($searchAttributes[$this->_params['bindAttribute']])) {
+            $searchAttributes[] = $this->_params['bindAttribute'];
+        }
+        foreach ($this->_params['searchUserBaseDN'] as $k => $baseDn) {
             $filter = str_replace(
                 array('%%LOGIN%%', '%%USERNAME%%'), // USERNAME deprecated
                 $login,
-                $searchUserFilter
+                $this->_params['searchUserFilter'][$k]
             );
             $search = @ldap_search(
                 $connect,
-                $this->_params['searchUserBaseDN'],
+                $baseDn,
                 $filter,
                 $searchAttributes
             );
             if (!$search) {
-                $this->logLdapError($connect, 'ldap error during search of the user "'.$login.'" with the filter "'.$filter.'"');
+                $this->logLdapError($connect, 'ldap: user "'.$login.'" not found with the DN "'.$baseDn.'" and filter "'.$filter.'"');
             }
             else if (($entry = @ldap_first_entry($connect, $search))) {
                 $dn = ldap_get_dn($connect, $entry);
                 $attributes = ldap_get_attributes($connect, $entry);
                 return $this->readLdapAttributes($dn, $attributes);
             }
-            else {
-                $filters[] = $filter;
-            }
         }
-        $this->logError('authloginpass: ldap user "'.$login.'" not found with the filters :"'.implode('", "', $filters).'"');
+        $this->logError('ldap user "'.$login.'" not found');
         return false;
-    }
-
-    protected $bindUserDnTries = array();
-
-    /**
-     * @param $connect
-     * @param UserLdapAttributes $userLdapAttributes
-     * @param string $login
-     * @param string $password
-     * @return false|string false if not found, else the DN used to bind to the user
-     */
-    protected function bindUser($connect, $userLdapAttributes, $login, $password)
-    {
-        $bind = false;
-        $this->bindUserDnTries = array();
-        $dnList = $this->getPossibleUserDn($login, $userLdapAttributes);
-        foreach ($dnList as $realDn) {
-            $bind = @ldap_bind($connect, $realDn, $password);
-            if ($bind) {
-                break;
-            } else {
-                $this->bindUserDnTries[] = $this->getLdapError($connect, 'tried to connect with "'.$realDn.'"');;
-            }
-        }
-        return ($bind ? $realDn : false);
-    }
-
-    /**
-     * @param string $login
-     * @param UserLdapAttributes $userLdapAttributes
-     * @return string[]
-     */
-    protected function getPossibleUserDn($login, $userLdapAttributes)
-    {
-        $dnList = array();
-        foreach ($this->_params['bindUserDN'] as $dn) {
-            $realDn = $this->createDn($dn, $login, $userLdapAttributes->ldapAttributes);
-            if ($realDn !== false) {
-                $dnList[] = $realDn;
-            }
-        }
-        return $dnList;
     }
 
     /**
@@ -590,12 +564,11 @@ class Ldap
     /**
      * Fill the UserLdapAttributes groups properties with the ldap groups of the user
      * @param $connect
-     * @param string $userDn
      * @param UserLdapAttributes $userLdapAttributes
      * @param string $login
      * @return bool true if groups have been found
      */
-    protected function searchUserGroups($connect, $userDn, $userLdapAttributes, $login)
+    protected function searchUserGroups($connect, $userLdapAttributes, $login)
     {
         // Do not search for groups if no group filter passed
         if ($this->_params['searchGroupFilter'] == '') {
@@ -618,7 +591,7 @@ class Ldap
                 $val
             );
         }, $values);
-        $values[] = $userDn;
+        $values[] = $userLdapAttributes->dn;
         $values[] = $login;
         $values[] = $login;
 

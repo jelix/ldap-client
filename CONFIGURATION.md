@@ -1,10 +1,10 @@
 Configuration of the ldap library
 ================================
 
-Connection configuration
-------------------------
+General configuration
+---------------------
 
-Parameters should be given into a PHP array.
+All configuration parameters should be given to the constructor of the `Jelix\Ldap\Ldap` object.
 
 Example of a such array:
 
@@ -17,21 +17,30 @@ $config = array(
     'adminPassword' => "Sup3rP4ssw0rd",
     'searchUserBaseDN' => "dc=XY,dc=fr",
     'searchUserFilter' => "(&(objectClass=posixAccount)(uid=%%LOGIN%%))",
-    'bindUserDN' => "uid=%?%,ou=users,dc=XY,dc=fr",
     'searchAttributes' => "uid:login,givenName:firstname,sn:lastname,mail:email",
     'searchGroupFilter' => "(&(objectClass=posixGroup)(cn=XYZ*)(memberUid=%%LOGIN%%))",
     'searchGroupProperty' => "cn",
     'searchGroupBaseDN' => '',
 );
+
+$ldap = new Jelix\Ldap\Ldap($config);
+
 ```
 
-First, you should set `hostname`, `port`, which are the name and the port of
-the ldap server.
+Parameters are described into sections below.
 
-You must also indicate how the connexion should be made. You should indicate 
-if you are using the ldap protocol without encryption (`tlsmode=`), the ldap 
-protocol with STARTTLS, (`tlsMode=starttls`) or if you are using the ldaps 
-protocol (`tlsMode=ldaps`).
+Connection configuration
+------------------------
+
+Parameters for the connection configuration are:
+
+- `hostname`: the name of the ldap server.
+- `port`: the port of the ldap server.
+- `tlsMode`: the security mode for the connection.
+
+With `tlsMode`, you should indicate if you are using the ldap protocol 
+without encryption (`tlsMode=`), the ldap protocol with STARTTLS, 
+(`tlsMode=starttls`) or if you are using the ldaps protocol (`tlsMode=ldaps`).
 
 If you use the standard port 389, you have the choice between no encryption (empty value)
 or `starttls`, for the `tlsMode` setting.
@@ -48,7 +57,7 @@ Configuration properties for the admin
 --------------------------------------
 
 The library needs to query the directory with a user having some rights allowing 
-to search a user, to get his attributes, his groups etc... He's called the "admin" 
+to search a user, to get his attributes, his groups, change a password etc... He's called the "admin" 
 in the library.
 
 You must indicate in `adminUserDn` and `adminPassword`, the DN (Distinguished Name) 
@@ -89,76 +98,53 @@ In this example, `searchAttributes="uid:login,givenName,sn:lastname,mail:email,d
 Configuration properties for authentication
 -------------------------------------------
 
-Before to try to authenticate the user against the ldap, the library retrieves
-user properties. It uses two configuration parameters : `searchUserFilter`
+Before to try to authenticate the user against the ldap, the library search and retrieves
+user properties. It uses three configuration parameters : `searchUserBaseDN`, `searchUserFilter`
 and `searchAttributes`.
+
+The `searchUserBaseDN` parameter indicates the path of the Ldap subtree to search in. 
+
+Example: `'searchUserBaseDN' => "ou=ADAM users,o=Microsoft,c=US"`.
+
+Example: 
 
 The `searchUserFilter` should contain the ldap query, and a `%%LOGIN%%` placeholder
 that will be replaced by the login given by the user.
 
-Example: `searchUserFilter="(&(objectClass=posixAccount)(uid=%%LOGIN%%))"`
+Example: `'searchUserFilter' => "(&(objectClass=posixAccount)(uid=%%LOGIN%%))"`
 
-You may also indicate the base DN for the search, into `searchUserBaseDN`. Example:
-`searchUserBaseDN="ou=ADAM users,o=Microsoft,c=US"`.
-
-Note that you can indicate several search filters, if you have
-complex ldap structure. Use `[]` to indicate an item list:
+Note that you can indicate several search filters and several base DN, if you have
+complex ldap structure. Use an array instead of a single string:
 
 ```
-searchUserFilter[]="(&(objectClass=posixAccount)(uid=%%LOGIN%%))"
-searchUserFilter[]="(&(objectClass=posixAccount)(cn=%%LOGIN%%))"
+'searchUserBaseDN' => [
+  "ou=ADAM users,o=Microsoft,c=US",
+  "ou=FOO users,o=Microsoft,c=US"
+  ],
+'searchUserFilter' => [
+  "(&(objectClass=posixAccount)(uid=%%LOGIN%%))",
+  "(&(objectClass=posixAccount)(cn=%%LOGIN%%))",
+  ]
 ```
 
-To verify the password, the library needs the DN (Distinguished Name) corresponding 
-to the user. It builds the DN from a "template" indicated into the `bindUserDN`
-property, and from various data. These data can be the given login or one of
-the ldap attributes of the user.
+You can have only one `searchUserBaseDN` value and several `searchUserFilter` values. The same base DN will
+be used for each filter.
 
-- Building the DN from the login given by the user: bindUserDN should contain
-  a DN, with a `%%LOGIN%%` placeholder that will be replaced by the login.
+You can have several `searchUserBaseDN` values and only one `searchUserFilter` value. The search will
+be done for each base DN, but with the same query.
 
-  Example: `bindUserDN="uid=%%LOGIN%%,ou=users,dc=XY,dc=fr"`. If the user
-  give `john.smith` as a login, the authentication will be made with the DN
-  `bindUserDN="uid=john.smith,ou=users,dc=XY,dc=fr"`.
+And you can have  several `searchUserBaseDN` values and several `searchUserFilter` values. In this case
+each filter should correspond to each base DN. You must then have same count of `searchUserBaseDN` values and `searchUserFilter` values.
+In the previous example, a first search will be made with the filter `(&(objectClass=posixAccount)(uid=%%LOGIN%%))` will be used with
+the base DN `ou=ADAM users,o=Microsoft,c=US`. And if the user is not found, a second search will be
+made with the filter `(&(objectClass=posixAccount)(cn=%%LOGIN%%))` and 
+the base DN `ou=FOO users,o=Microsoft,c=US`.
 
-  For some LDAP, the DN could be a simple string, for example an email. 
-  You could then set `bindUserDN="%%LOGIN%%@company.local"`. Or even 
-  `bindUserDN="%%LOGIN%%"` if the login can type the full value of
-  the DN or an email or else.. (Probably it's not recommended to allow
-  a user to type himself its full DN, it can be a security issue)
-
-- Building the DN from one of the ldap attributes of the user. 
-  In this case, the library will first query the ldap directory with the 
-  `searchUserFilter` filter, to retrieve the user's ldap attributes.
-  Then, in bindUserDN, you can indicate a DN where some values will be replaced
-  by some attributes values, or you can indicate a single attribute name,
-  corresponding to an attribute that contain the full DN of the user.
-  
-  For the first case, bindUserDn should contain a DN, with some `%?%` placeholders
-  that will be replaced by corresponding attributes value. Example:
-  `bindUserDN="uid=%?%,ou=users,dc=XY,dc=fr"`. Here it replaces the `%?%` by the
-  value of the `uid` attribute readed from the user's attributes.
-  The attribute name should be present into the `searchAttributes`
-  configuration property, even with no field mapping. Ex: `...,uid,...`. See above.
-  
-  For the second case, just indicate the attribute name, prefixed with a `$`.
-  Example: `bindUserDN="$dn"`. Here it takes the `dn` attribute readed from 
-  the search, and use its full value as the DN to login against the ldap server.
-  It is useful for some LDAP server like sometimes Active Directory that need a 
-  full DN specific for each user.
-  The attribute name should be present into the `searchAttributes`
-  configuration property, even with no field mapping. Ex: `...,dn:,...`. See above.
-
-Note that you can indicate several dn templates, if you have
-complex ldap structure. Use `[]` to indicate an item list:
-
-```
-bindUserDN[]="uid=%?%,ou=users,dc=XY,dc=fr"
-bindUserDN[]="cn=%?%,ou=users,dc=XY,dc=fr"
-```
+If there is a result, the DN of the found entry will be used to "bind" to the ldap server with the
+password given by the user. (set the `verifyAuthentication()` method).
 
 Retrieving groups of the user
-----------------------------------------
+-----------------------------
 
 You may want to retrieve the list of ldap groups where the user is in.
 
