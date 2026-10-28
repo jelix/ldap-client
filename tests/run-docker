@@ -24,9 +24,18 @@ if [ ! -f docker-conf/certs/ldap.jelix.crt ]; then
   )
 fi
 
+if [ ! -f docker-conf/certs/client.jelix.crt ]; then
+  echo "generate certificates for the ldap client"
+  (
+  cd docker-conf
+  ./ssl.sh createCert client.jelix tests.jelix
+  )
+fi
+
 if [ "$CMD" == "reset" ]; then
     # Stop/Remove containers
     docker compose -p jelix-ldap-tests rm -sf || true
+    rm -f tests/tmp/ldap_tests.log
     exit 0
 elif [ -z "$CMD" ]; then
     CMD="up"

@@ -39,8 +39,8 @@ Parameters for the connection configuration are:
 - `tlsMode`: the security mode for the connection.
 
 With `tlsMode`, you should indicate if you are using the ldap protocol 
-without encryption (`tlsMode=`), the ldap protocol with STARTTLS, 
-(`tlsMode=starttls`) or if you are using the ldaps protocol (`tlsMode=ldaps`).
+without encryption (`'tlsMode' => ''`), the ldap protocol with STARTTLS, 
+(`'tlsMode' => 'starttls'`) or if you are using the ldaps protocol (`'tlsMode' => 'ldaps'`).
 
 If you use the standard port 389, you have the choice between no encryption (empty value)
 or `starttls`, for the `tlsMode` setting.
@@ -49,8 +49,27 @@ If you are using the port 636, it automatically uses the ldaps protocol. In this
 case, setting `tlsMode` to `ldaps` is optional.
 
 Since ldaps is deprecated in OpenLdap, the best solution is to use the port 389
-with `tlsMode=starttls`.
+with `'tlsMode' => 'starttls'`.
 
+
+Using client certificates and custom CA certificates
+----------------------------------------------------
+
+If the server is using a custom or self-signed CA certificate, indicate the path to this certificate
+into the configuration parameter `clientTLSCACertificateFile`.
+
+If the server requires a client certificate, indicate the path to the client certificate
+into the configuration parameter `clientTLSCertificateFile` and the path to the client key
+into the configuration parameter `clientTLSKeyFile`.
+
+**Warning**: don't use these parameters on a PHP server which serves different PHP applications, because these
+openldap settings are global to the PHP process and can affect other PHP applications running on the same server. For the same reason, you cannot use several instances of the Ldap class with different client certificates, during the same http request. All connections will use the same client certificate. This is not a limitation of our Ldap library, but of PHP and OpenLdap.
+
+If you are using PHP-FPM, you can configure a pool dedicated to your application, so processes are not shared
+with other applications.
+
+An other solution is to use the Ldap class in a separate process by using the php function `proc_open()` and
+other proc functions.
 
 
 Configuration properties for the admin user

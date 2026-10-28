@@ -1,0 +1,16 @@
+dn: cn=config
+changetype: modify
+replace: olcTLSCACertificateFile
+olcTLSCACertificateFile: /etc/ldap/sasl2/ca.pem
+-
+replace: olcTLSCertificateFile
+olcTLSCertificateFile: /etc/ldap/sasl2/cert.pem
+-
+replace: olcTLSCertificateKeyFile
+olcTLSCertificateKeyFile: /etc/ldap/sasl2/privkey.key
+-
+replace: olcTLSProtocolMin
+olcTLSProtocolMin: 3.3
+-
+replace: olcTLSVerifyClient
+olcTLSVerifyClient: never

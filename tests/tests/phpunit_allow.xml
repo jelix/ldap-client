@@ -2,7 +2,7 @@
 <phpunit bootstrap="bootstrap.php">
   <testsuites>
     <testsuite name="tests">
-      <directory>units/</directory>
+      <file>units/ldapallow_Test.php</file>
     </testsuite>
   </testsuites>
 </phpunit>

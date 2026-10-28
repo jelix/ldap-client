@@ -6,7 +6,8 @@ shift
 if [ "$COMMAND" == "" ]; then
     echo "Error: command is missing"
     echo "Possible commands: clean_tmp, reset, install, rights, composer-install, composer-update"
-    echo " unit-tests,  shell, shellroot"
+    echo " unit-tests, unit-tests-never, unit-tests-demand, unit-tests-allow"
+    echo " shell, shellroot"
     echo " ldapreset, ldapusers"
     exit 1;
 fi
@@ -19,7 +20,34 @@ case $COMMAND in
     composer-update)
         docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh composer_update;;
     unit-tests)
-        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests $@;;
+      echo "------ Unit tests against an ldap server that never ask a client certificate"
+      #docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh reset
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-never
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_never.xml $@
+      echo "------ Unit tests against an ldap server that allow a client certificate"
+      #docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh reset
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-allow
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_allow.xml $@
+      echo "------ Unit tests against an ldap server that need a client certificate"
+      #docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh reset
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-demand
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_demand.xml $@
+      ;;
+    unit-tests-never)
+      echo "------ Unit tests against an ldap server that never ask a client certificate"
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-never
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_never.xml $@
+      ;;
+    unit-tests-demand)
+      echo "------ Unit tests against an ldap server that need a client certificate"
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-demand
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_demand.xml $@
+      ;;
+    unit-tests-allow)
+      echo "------ Unit tests against an ldap server that allow a client certificate"
+      docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-allow
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_allow.xml $@
+      ;;
     shell)
        docker exec -it --user userphp ${CONTAINER_PREFIX}_php  /bin/bash -l;;
     shellroot)
@@ -33,9 +61,17 @@ case $COMMAND in
     ldapshell)
        docker exec -it ${CONTAINER_PREFIX}_server  /bin/bash -l
      ;;
+    ldap-tls-never)
+       docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-never
+       ;;
+    ldap-tls-allow)
+       docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-allow
+       ;;
+    ldap-tls-demand)
+       docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-demand
+       ;;
     *)
         echo "wrong command"
         exit 2
         ;;
 esac
-

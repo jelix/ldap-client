@@ -12,6 +12,7 @@ services:
       SLAPD_TLS_CRT_FILENAME: "ldap.jelix.crt"
       SLAPD_TLS_KEY_FILENAME: "ldap.jelix.key"
       SLAPD_TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+      #SLAPD_TLS_VERIFY_CLIENT: "allow"
     volumes:
       - "./docker-conf/certs:/customcerts"
       - "./docker-conf/openldap/ldif:/customldif"
@@ -26,9 +27,9 @@ services:
         PHP_VERSION: "${PHP_VERSION}"
     container_name: jelix_ldap_php
     environment:
-      TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
-      LDAP_TLS_CRT_FILENAME: "ldap.jelix.crt"
-      LDAP_TLS_KEY_FILENAME: "ldap.jelix.key"
+      #TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+      #LDAP_TLS_CRT_FILENAME: "client.jelix.crt"
+      #LDAP_TLS_KEY_FILENAME: "client.jelix.key"
       APP_USER_ID: ${FPM_USER_ID}
       APP_GROUP_ID: ${FPM_GROUP_ID}
       DISPLAY_ERRORS: "on"
@@ -37,4 +38,3 @@ services:
       - "./docker-conf/certs:/customcerts"
     depends_on:
       - openldap
-

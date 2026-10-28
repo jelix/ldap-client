@@ -81,9 +81,12 @@ EOF
           chmod 0640 /etc/ldap/sasl2/privkey.key
 
           slapcat -n0 -F /etc/ldap/slapd.d -l /tmp/config.ldif
-          sed -i "s/\(cn: config\)/\1\nolcTLSCACertificateFile: \/etc\/ldap\/sasl2\/ca.pem\nolcTLSCertificateFile: \/etc\/ldap\/sasl2\/cert.pem\nolcTLSCertificateKeyFile: \/etc\/ldap\/sasl2\/privkey.key\nolcTLSVerifyClient: never/g" /tmp/config.ldif
-          #sed -i "s/\(cn: config\)/\1\nolcTLSCACertificateFile: \/etc\/ssl\/certs\/ldap_CA.crt\nolcTLSCertificateFile: \/etc\/ssl\/certs\/ldap.crt\nolcTLSCertificateKeyFile: \/etc\/ssl\/private\/ldap.key\nolcTLSDHParamFile: \/etc\/ssl\/ldap_dhparam.pem\nolcTLSVerifyClient: never/g" /tmp/config.ldif
 
+          if [[ -n "$SLAPD_TLS_VERIFY_CLIENT" ]]; then
+              sed -i "s/\(cn: config\)/\1\nolcTLSCACertificateFile: \/etc\/ldap\/sasl2\/ca.pem\nolcTLSCertificateFile: \/etc\/ldap\/sasl2\/cert.pem\nolcTLSCertificateKeyFile: \/etc\/ldap\/sasl2\/privkey.key\nolcTLSVerifyClient: ${SLAPD_TLS_VERIFY_CLIENT}/g" /tmp/config.ldif
+          else
+              sed -i "s/\(cn: config\)/\1\nolcTLSCACertificateFile: \/etc\/ldap\/sasl2\/ca.pem\nolcTLSCertificateFile: \/etc\/ldap\/sasl2\/cert.pem\nolcTLSCertificateKeyFile: \/etc\/ldap\/sasl2\/privkey.key\nolcTLSVerifyClient: never/g" /tmp/config.ldif
+          fi
           rm -rf /etc/ldap/slapd.d/*
           slapadd -n0 -F /etc/ldap/slapd.d -l /tmp/config.ldif
           rm /tmp/config.ldif

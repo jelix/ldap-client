@@ -65,10 +65,10 @@ class Ldap
 
     protected static $defaultParameters = array(
         'hostname'      =>  'localhost',
-        'tlsMode'       => '',
-        'port'          =>  389,
-        'adminUserDn'      =>  null,
-        'adminPassword'      =>  null,
+        'tlsMode'       => '', // TLS mode: none, starttls, ldaps
+        'port'          =>  389, // Port number
+        'adminUserDn'      =>  null, // Admin user DN
+        'adminPassword'      =>  null, // Admin user password
         'protocolVersion'   =>  3,
         'searchUserBaseDN' => '',
         'searchUserFilter' => '',
@@ -84,6 +84,9 @@ class Ldap
         'featureUpdateUser' => false,
         'featureDeleteUser' => false,
         'featureChangePassword' => false,
+        'clientTLSCACertificateFile'=> '',
+        'clientTLSCertificateFile'=> '',
+        'clientTLSKeyFile'=> '',
     );
 
     protected $uriConnect = '';
@@ -744,12 +747,34 @@ class Ldap
             ldap_set_option($connect, LDAP_OPT_PROTOCOL_VERSION, $this->parameters['protocolVersion']);
             ldap_set_option($connect, LDAP_OPT_REFERRALS, 0);
 
+            if ($this->parameters['tlsMode'] != '') {
+                if ($this->parameters['clientTLSCACertificateFile']) {
+                    ldap_set_option(null, LDAP_OPT_X_TLS_CACERTFILE, $this->parameters['clientTLSCACertificateFile']);
+                }
+                if ($this->parameters['clientTLSCertificateFile']) {
+                    ldap_set_option(null, LDAP_OPT_X_TLS_CERTFILE, $this->parameters['clientTLSCertificateFile']);
+                }
+                if ($this->parameters['clientTLSKeyFile']) {
+                    ldap_set_option(null, LDAP_OPT_X_TLS_KEYFILE, $this->parameters['clientTLSKeyFile']);
+                }
+
+                ldap_set_option(null, LDAP_OPT_X_TLS_PROTOCOL_MIN , LDAP_OPT_X_TLS_PROTOCOL_TLS1_1);
+                if (defined('LDAP_OPT_X_TLS_PROTOCOL_MAX') && defined('LDAP_OPT_X_TLS_PROTOCOL_TLS1_3')) {
+                    ldap_set_option(null, LDAP_OPT_X_TLS_PROTOCOL_MAX , LDAP_OPT_X_TLS_PROTOCOL_TLS1_3);
+                }
+                // LDAP_OPT_X_TLS_NEWCTX (0x600f) - force libldap to rebuild
+                // the TLS context from the options we just set
+                // FIXME it doesn't work with PHP 8. perhaps in futur versions?
+                //ldap_set_option(NULL, 0x600f, 0);
+            }
+
             if ($this->parameters['tlsMode'] == 'starttls') {
                 if (!@ldap_start_tls($connect)) {
-                    $this->log(self::LOG_ERROR, 'ldap connection: impossible to start TLS connection to '.$this->uriConnect, $connect);
+                    $this->log(self::LOG_ERROR, 'ldap connection: impossible to start TLS connection to ' . $this->uriConnect, $connect);
                     throw new Exception('ldap connection: impossible to start TLS connection');
                 }
             }
+
             return $connect;
         }
         $this->log(self::LOG_ERROR, 'ldap connection: impossible to connect to ldap with the given uri "'.$this->uriConnect.'"');

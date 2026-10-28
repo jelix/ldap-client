@@ -9,15 +9,15 @@ use Jelix\Ldap\Ldap;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Tests ldap library
+ * Tests ldap library against a server that need a client certificate
  */
-class ldap_Test  extends TestCase {
+class ldapdemand_Test  extends TestCase {
 
     protected $ldapPort = 389;
 
     protected $ldapTlsMode = '';
 
-    protected $ldapProfileName = 'lpldap';
+    protected $ldapProfileName = 'lpldapdemand';
 
     protected $ldapProfile = array(
         'hostname'      =>  'ldap.jelix',
@@ -40,26 +40,31 @@ class ldap_Test  extends TestCase {
         'featureUpdateUser' => true,
         'featureDeleteUser' => true,
         'featureChangePassword' => true,
-
+        'clientTLSCACertificateFile' => '/customcerts/tests.jelix-CA.crt',
+        'clientTLSCertificateFile' => '/customcerts/client.jelix.crt',
+        'clientTLSKeyFile' => '/customcerts/client.jelix.key',
     );
+
+    function testUserExistsStartTlsWithoutClientCert() {
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'starttls';
+        $config['clientTLSCACertificateFile'] = '';
+        $config['clientTLSCertificateFile'] = '';
+        $config['clientTLSKeyFile'] = '';
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        $ldap = new Ldap($config, new TestLogger());
+        $this->assertTrue($ldap->userExists('john'));
+        $this->assertFalse($ldap->userExists('johnny'));
+    }
 
     function testUserExists() {
         $config = $this->ldapProfile;
-        $config['tlsMode'] = '';
         $ldap = new Ldap($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
     }
 
-    function testUserExistsStartTls() {
-        $config = $this->ldapProfile;
-        $config['tlsMode'] = 'starttls';
-        $ldap = new Ldap($config, new TestLogger());
-
-        $this->assertTrue($ldap->userExists('john'));
-        $this->assertFalse($ldap->userExists('johnny'));
-    }
 
     function testUserExistsLdaps() {
         $config = $this->ldapProfile;
@@ -72,11 +77,24 @@ class ldap_Test  extends TestCase {
         $this->assertFalse($ldap->userExists('johnny'));
     }
 
-    function testGetUserOfPeople()
-    {
+    function testUserExistsLdapsWithoutClientCert() {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'ldaps';
         $config['port'] = 636;
+        $config['clientTLSCACertificateFile'] = '';
+        $config['clientTLSCertificateFile'] = '';
+        $config['clientTLSKeyFile'] = '';
+        $this->expectException(\Jelix\Ldap\Exception::class);
+
+        $ldap = new Ldap($config, new TestLogger());
+
+        $this->assertTrue($ldap->userExists('john'));
+        $this->assertFalse($ldap->userExists('johnny'));
+    }
+
+    function testGetUserOfPeople()
+    {
+        $config = $this->ldapProfile;
 
         $ldap = new Ldap($config);
         $ldapAttr = $ldap->getUser('john');
@@ -98,8 +116,6 @@ class ldap_Test  extends TestCase {
     function testGetUserOfAdmin()
     {
         $config = $this->ldapProfile;
-        $config['tlsMode'] = 'ldaps';
-        $config['port'] = 636;
 
         $config = $this->ldapProfile;
         //$config['searchUserBaseDN'] = 'ou=admins,dc=tests,dc=jelix';

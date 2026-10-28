@@ -16,11 +16,10 @@ RUN apt-get update &&  \
     apt-get clean
 
 RUN set -eux; \
-    mkdir -p /etc/openldap/ /etc/ssl/ldap/; \
-    chmod 755 /etc/openldap/ /etc/ssl/ldap/;
+    mkdir -p /etc/ldap/ /etc/ssl/ldap/; \
+    chmod 755 /etc/ldap/ /etc/ssl/ldap/;
 
 COPY profile.start /etc/profile.d/start
-COPY ldap.conf /etc/openldap/ldap.conf
 COPY jelix_entrypoint.sh /bin/entrypoint.d/
 COPY appctl.sh /bin/
 COPY xdebug.ini /etc/php/${PHP_VERSION}/fpm/conf.d/90-xdebug.ini
