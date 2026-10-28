@@ -53,60 +53,67 @@ with `tlsMode=starttls`.
 
 
 
-Configuration properties for the admin
---------------------------------------
+Configuration properties for the admin user
+-------------------------------------------
 
 The library needs to query the directory with a user having some rights allowing 
-to search a user, to get his attributes, his groups, change a password etc... He's called the "admin" 
-in the library.
+to search a user, to get his attributes, his groups, change a password etc...
+He's called the "admin" in the library.
 
 You must indicate in `adminUserDn` and `adminPassword`, the DN (Distinguished Name) 
 and the password of this user. 
-
-
 
 Configuration properties for user data
 --------------------------------------
 
 Some methods like `getUser` or `verifyAuthentication` loads some ldap attributes
-corresponding to the user. 
+corresponding to the user, and return an object `Jelix\Ldap\UserLdapAttributes`.
+This object contains some ldap attributes, but also some user attributes.
 
-You should indicate which ldap attributes it can retrieve, and which
-database fields that will receive the ldap attributes values.
+You should indicate which ldap attributes should be retrieved, and which
+user attributes will receive the ldap attributes values.
 
 You indicate such information into the `searchAttributes` property. It is a 
-list of assignments, separated by a coma.
+list of assignments. It can be a string or an array
 
-An assignment could be written like:
+In a string, assignments are separated by a coma. An assignment could be written like:
 
-- `<ldap attribute>:<table field>`: the value of the given ldap attribute will be stored into the given table field
-- `<ldap attribute>`: the value of the given ldap attribute will be stored into the table field having the same name
-- `<ldap attribute>:` (notice the colon at the end): the ldap attribute is retrieved, but no assignment is made. The
-  value can be used into other pattern like the `bindUserDN` pattern.
+- `<ldap attribute>:<user attribute>`: the value of the given ldap attribute will be stored 
+  into the given user attribute
+- `<ldap attribute>`: the value of the given ldap attribute will be stored into the user 
+  attribute having the same name
+- `<ldap attribute>:` (notice the colon at the end): the ldap attribute is retrieved, but 
+  no assignment is made. The value can be used into other pattern like the `bindUserDN` pattern.
 
 In this example, `searchAttributes="uid:login,givenName,sn:lastname,mail:email,dn:"`:
 
-- the value of the `uid` ldap attribute will be stored into the `login` field 
-- the value of the `sn` ldap attribute will be stored into the `lastname` field
-- the value of the `givenName` ldap attribute will be stored into a field that
-  have the same name, as there is no field name nor `:`.
-- there will not be mapping for the `dn` property. There is a `:` without field name.
-  It will be readed from ldap, and can be used into the `bindUserDN` DN template.
+- the value of the `uid` ldap attribute will be stored into the `login` attribute 
+- the value of the `sn` ldap attribute will be stored into the `lastname` attribute
+- the value of the `givenName` ldap attribute will be stored into an attribute that
+  have the same name, as there is no user attribute name nor `:`.
+- there will not be mapping for the `dn` property. There is a `:` without a user attribute
+  name. It will be read from ldap, and could be used into the `bindUserDN` DN template.
   (see below).
 
+If `searchAttributes` is an array, it can be filled like this:
+
+```php
+array(
+    '<ldap attribute>' => '<user attribute>',
+    '<ldap attribute>' => '=', // the user attribute has the same name as the ldap attribute 
+    '<ldap attribute>' => '',  // the ldap attribute is retrieved but not mapped into a user attribute
+)
+```
 
 Configuration properties for authentication
 -------------------------------------------
 
 Before to try to authenticate the user against the ldap, the library search and retrieves
-user properties. It uses three configuration parameters : `searchUserBaseDN`, `searchUserFilter`
-and `searchAttributes`.
+user properties from the ldap. It uses three configuration parameters : `searchUserBaseDN`,
+`searchUserFilter` and `searchAttributes`.
 
 The `searchUserBaseDN` parameter indicates the path of the Ldap subtree to search in. 
-
 Example: `'searchUserBaseDN' => "ou=ADAM users,o=Microsoft,c=US"`.
-
-Example: 
 
 The `searchUserFilter` should contain the ldap query, and a `%%LOGIN%%` placeholder
 that will be replaced by the login given by the user.
@@ -116,7 +123,8 @@ Example: `'searchUserFilter' => "(&(objectClass=posixAccount)(uid=%%LOGIN%%))"`
 Note that you can indicate several search filters and several base DN, if you have
 complex ldap structure. Use an array instead of a single string:
 
-```
+```php
+array(
 'searchUserBaseDN' => [
   "ou=ADAM users,o=Microsoft,c=US",
   "ou=FOO users,o=Microsoft,c=US"
@@ -125,23 +133,26 @@ complex ldap structure. Use an array instead of a single string:
   "(&(objectClass=posixAccount)(uid=%%LOGIN%%))",
   "(&(objectClass=posixAccount)(cn=%%LOGIN%%))",
   ]
+)
 ```
 
-You can have only one `searchUserBaseDN` value and several `searchUserFilter` values. The same base DN will
-be used for each filter.
+You can have only one `searchUserBaseDN` value and several `searchUserFilter` values. The same 
+base DN will be used for each filter.
 
 You can have several `searchUserBaseDN` values and only one `searchUserFilter` value. The search will
 be done for each base DN, but with the same query.
 
-And you can have  several `searchUserBaseDN` values and several `searchUserFilter` values. In this case
-each filter should correspond to each base DN. You must then have same count of `searchUserBaseDN` values and `searchUserFilter` values.
-In the previous example, a first search will be made with the filter `(&(objectClass=posixAccount)(uid=%%LOGIN%%))` will be used with
-the base DN `ou=ADAM users,o=Microsoft,c=US`. And if the user is not found, a second search will be
-made with the filter `(&(objectClass=posixAccount)(cn=%%LOGIN%%))` and 
-the base DN `ou=FOO users,o=Microsoft,c=US`.
+And you can have several `searchUserBaseDN` values and several `searchUserFilter` values. 
+In this case each filter should correspond to each base DN. You must then have same count
+of `searchUserBaseDN` values and `searchUserFilter` values.
 
-If there is a result, the DN of the found entry will be used to "bind" to the ldap server with the
-password given by the user. (set the `verifyAuthentication()` method).
+In the previous example, a first search will be made with the filter `(&(objectClass=posixAccount)(uid=%%LOGIN%%))`
+will be used with the base DN `ou=ADAM users,o=Microsoft,c=US`. And if the user is not
+found, a second search will be made with the filter `(&(objectClass=posixAccount)(cn=%%LOGIN%%))` 
+and the base DN `ou=FOO users,o=Microsoft,c=US`.
+
+If there is a result, the DN of the found entry will be used to "bind" to the ldap 
+server with the password given by the user. (set the `verifyAuthentication()` method).
 
 Retrieving groups of the user
 -----------------------------
@@ -151,16 +162,32 @@ You may want to retrieve the list of ldap groups where the user is in.
 You should then indicate into `searchGroupFilter` the ldap query that will
 retrieve the groups of the user.
 
-Example: `searchGroupFilter="(&(objectClass=posixGroup)(member=%%USERDN%%))"`
+Example: `'searchGroupFilter' => "(&(objectClass=posixGroup)(member=%%USERDN%%))"`
 
 `%%USERDN%%` is replaced by the user dn.`%%LOGIN%%` is replaced by the login.  
 You can also use any ldap attributes you indicate into `searchAttributes`, 
-between `%%`. Example: `searchGroupFilter="(&(objectClass=posixGroup)(member=%%givenName%%))"`
+between `%%`. Example: `'searchGroupFilter' => "(&(objectClass=posixGroup)(member=%%givenName%%))"`
 
 With `searchGroupProperty`, you must indicate the ldap attribute that
 contains the group name. Ex: `searchGroupProperty="cn"`.
 
 You may also indicate the base DN for the search, into `searchGroupBaseDN`. Example:
-`searchGroupBaseDN="ou=Groups,dc=Acme,dc=pt"`.
+`'searchGroupBaseDN' => "ou=Groups,dc=Acme,dc=pt"`.
 
 If you don't want the loading of the groups list, leave `searchGroupFilter` empty.
+
+
+Enable ldap modification features
+---------------------------------
+
+The main goal of this library is to authenticate a user against a ldap server. 
+But you may want to use it to manage an LDAP user account: modifying his password, modifying his attributes, deleting it, or to create a new user.
+
+These features are disabled by default. 
+
+To enable these features, you must set `true` to some LDAP parameters:
+
+- `featureCreateUser` : to enable the creation of a new user, and to be able to call the method `createUser()`
+- `featureUpdateUser` : to enable the modification of a user attributes, and to be able to call the method `updateUser()`
+- `featureDeleteUser` : to enable the deletion of a user, and to be able to call the method `deleteUser()`
+- `featureChangePassword` : to enable the modification of a user password, and to be able to call the method `changePassword()`

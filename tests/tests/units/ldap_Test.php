@@ -1,7 +1,7 @@
 <?php
 /**
  * @author      laurent Jouanneau
- * @copyright   2019-2023 laurent Jouanneau
+ * @copyright   2019-2026 laurent Jouanneau
  * @link        https://www.jelix.org
  * @licence     MIT
  */
@@ -36,13 +36,17 @@ class ldap_Test  extends TestCase {
         'newUserDN' => "uid=%%LOGIN%%,ou=guest,dc=tests,dc=jelix",
         'newUserLdapAttributes' => "objectClass:inetOrgPerson,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%",
         'searchAttributes' => "uid:login,displayName:realname,mail:email",
+        'featureCreateUser' => true,
+        'featureUpdateUser' => true,
+        'featureDeleteUser' => true,
+        'featureChangePassword' => true,
 
     );
 
     function testUserExists() {
         $config = $this->ldapProfile;
         $config['tlsMode'] = '';
-        $ldap = new Ldap($config);
+        $ldap = new Ldap($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -51,7 +55,7 @@ class ldap_Test  extends TestCase {
     function testUserExistsStartTls() {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'starttls';
-        $ldap = new Ldap($config);
+        $ldap = new Ldap($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -62,7 +66,7 @@ class ldap_Test  extends TestCase {
         $config['tlsMode'] = 'ldaps';
         $config['port'] = 636;
 
-        $ldap = new Ldap($config);
+        $ldap = new Ldap($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -99,7 +103,6 @@ class ldap_Test  extends TestCase {
 
         $config = $this->ldapProfile;
         //$config['searchUserBaseDN'] = 'ou=admins,dc=tests,dc=jelix';
-        //$config['bindUserDN'] =  "uid=%?%,ou=people,dc=tests,dc=jelix",
         $ldap = new Ldap($config);
         $ldapAttr = $ldap->getUser('laurent');
         $this->assertIsObject($ldapAttr);

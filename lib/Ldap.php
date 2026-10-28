@@ -1,16 +1,19 @@
 <?php
 /**
  * @author     Laurent Jouanneau
- * @copyright  2019-2023 Laurent Jouanneau
+ * @copyright  2019-2026 Laurent Jouanneau
  * @license   MIT
  */
 
 namespace Jelix\Ldap;
 
+use LDAP\Connection;
+use LDAP\ResultEntry;
 use Psr\Log\LoggerInterface;
+use RandomLib\Factory;
 
 /**
- * it checks authentication into an ldap
+ * Helper class to do authentication against an ldap
  *
  * @internal see https://tools.ietf.org/html/rfc4510
  */
@@ -28,29 +31,75 @@ class Ldap
     /** @var int the library can delete user */
     const FEATURE_DELETE_USER = 4;
 
+    /** @var int the library can update user */
+    const FEATURE_UPDATE_USER = 8;
+
+    protected const LOG_ERROR = 5;
+    protected const LOG_WARNING = 4;
+    protected const LOG_NOTICE = 3;
+    protected const LOG_INFO = 2;
+    protected const LOG_DEBUG = 1;
+
+    protected static $loggerMethods = array(
+        1 => 'debug',
+        2 => 'info',
+        3 => 'notice',
+        4 => 'warning',
+        5 => 'error'
+
+    );
+
     /**
      * Default user attributes list
      * @var array
      */
-    protected $_default_attributes = array(
+    protected static $defaultAttributes = array(
         "cn"=>"lastname",
         "name"=>"firstname"
     );
 
-    protected $_defaultNewUserAttributes = array(
+    protected static $defaultNewUserAttributes = array(
         "objectClass" => "inetOrgPerson",
         "userPassword" => "%%PASSWORD%%"
     );
 
+    protected static $defaultParameters = array(
+        'hostname'      =>  'localhost',
+        'tlsMode'       => '',
+        'port'          =>  389,
+        'adminUserDn'      =>  null,
+        'adminPassword'      =>  null,
+        'protocolVersion'   =>  3,
+        'searchUserBaseDN' => '',
+        'searchUserFilter' => '',
+        'searchAttributes' => '',
+        'bindAttribute' => 'dn',
+        'searchGroupFilter' => '',
+        'searchGroupProperty' => '',
+        'searchGroupBaseDN' => '',
+        'newUserDN' => '',
+        'passwordLdapHashAlgo' => '',
+        'passwordLdapSaltLength' => 5,
+        'featureCreateUser' => false,
+        'featureUpdateUser' => false,
+        'featureDeleteUser' => false,
+        'featureChangePassword' => false,
+    );
 
     protected $uriConnect = '';
 
+    /** @var LoggerInterface|null  */
     protected $logger;
+
+    /**
+     * @var array list of configuration parameters
+     */
+    protected $parameters = array();
 
     /**
      * @param array $params configuration parameters
      */
-    public function __construct($params, LoggerInterface $logger = null)
+    public function __construct(array $params, LoggerInterface $logger = null)
     {
         if (!extension_loaded('ldap')) {
             throw new Exception('PHP Ldap extension is not activated');
@@ -59,100 +108,84 @@ class Ldap
         $this->logger = $logger;
 
         // default ldap parameters
-        $_default_params = array(
-            'hostname'      =>  'localhost',
-            'tlsMode'       => '',
-            'port'          =>  389,
-            'adminUserDn'      =>  null,
-            'adminPassword'      =>  null,
-            'protocolVersion'   =>  3,
-            'searchUserBaseDN' => '',
-            'searchUserFilter' => '',
-            'searchAttributes' => '',
-            'bindAttribute' => 'dn',
-            'searchGroupFilter' => '',
-            'searchGroupProperty' => '',
-            'searchGroupBaseDN' => '',
-            'newUserDN' => '',
-            'passwordLdapHashAlgo' => '',
-            'passwordLdapSaltLength' => 5,
-            'featureCreateUser' => true,
-            'featureDeleteUser' => true,
-            'featureChangePassword' => true,
-        );
-
-        $this->_params = $params;
+        $this->parameters = $params;
 
         // iterate each default parameter and apply it to actual params if missing in $params.
-        foreach ($_default_params as $name => $value) {
-            if (!isset($this->_params[$name]) || $this->_params[$name] === '') {
-                $this->_params[$name] = $value;
+        foreach (self::$defaultParameters as $name => $value) {
+            if (!isset($this->parameters[$name]) || $this->parameters[$name] === '') {
+                $this->parameters[$name] = $value;
             }
         }
 
-        if (!isset($this->_params['searchUserBaseDN']) || $this->_params['searchUserBaseDN'] == '') {
+        if (!isset($this->parameters['searchUserBaseDN']) || $this->parameters['searchUserBaseDN'] == '') {
             throw new Exception('ldap configuration: base DN for search is missing');
         }
 
-        if (!is_array($this->_params['searchUserBaseDN'])) {
-            $this->_params['searchUserBaseDN'] = array($this->_params['searchUserBaseDN']);
+        if (!is_array($this->parameters['searchUserBaseDN'])) {
+            $this->parameters['searchUserBaseDN'] = array($this->parameters['searchUserBaseDN']);
         }
 
-        if (!isset($this->_params['searchUserFilter']) || $this->_params['searchUserFilter'] == '') {
+        if (!isset($this->parameters['searchUserFilter']) || $this->parameters['searchUserFilter'] == '') {
             throw new Exception('ldap configuration: search filter missing');
         }
-        if (!is_array($this->_params['searchUserFilter'])) {
-            $this->_params['searchUserFilter'] = array($this->_params['searchUserFilter']);
+        if (!is_array($this->parameters['searchUserFilter'])) {
+            $this->parameters['searchUserFilter'] = array($this->parameters['searchUserFilter']);
         }
 
-        $cf = count($this->_params['searchUserFilter']);
-        $cb = count($this->_params['searchUserBaseDN']);
+        $cf = count($this->parameters['searchUserFilter']);
+        $cb = count($this->parameters['searchUserBaseDN']);
         if ($cf != $cb) {
             if ($cf > 1 && $cb > 1) {
                 throw new Exception('ldap configuration: wrong number of searchUserFilter and searchUserBaseDN values');
             }
             if ($cf === 1) {
-                $this->_params['searchUserFilter'] = array_fill(0, $cb, $this->_params['searchUserFilter'][0]);
+                $this->parameters['searchUserFilter'] = array_fill(0, $cb, $this->parameters['searchUserFilter'][0]);
             }
             else if ($cb === 1) {
-                $this->_params['searchUserBaseDN'] = array_fill(0, $cf, $this->_params['searchUserBaseDN'][0]);
+                $this->parameters['searchUserBaseDN'] = array_fill(0, $cf, $this->parameters['searchUserBaseDN'][0]);
             }
         }
 
-        if (!isset($this->_params['searchAttributes']) || $this->_params['searchAttributes'] == '') {
-            $this->_params['searchAttributes'] = $this->_default_attributes;
-        } else {
-            $attrs = explode(",", $this->_params['searchAttributes']);
-            $this->_params['searchAttributes'] = array();
+        if (!isset($this->parameters['searchAttributes']) || $this->parameters['searchAttributes'] == '') {
+            $this->parameters['searchAttributes'] = self::$defaultAttributes;
+        } else if (is_string($this->parameters['searchAttributes'])) {
+            $attrs = explode(",", $this->parameters['searchAttributes']);
+            $this->parameters['searchAttributes'] = array();
             foreach ($attrs as $attr) {
                 if (strpos($attr, ':') === false) {
                     $attr = trim($attr);
-                    $this->_params['searchAttributes'][$attr] = $attr;
+                    $this->parameters['searchAttributes'][$attr] = $attr;
                 } else {
                     $attr = explode(':', $attr);
-                    $this->_params['searchAttributes'][trim($attr[0])] = trim($attr[1]);
+                    $this->parameters['searchAttributes'][trim($attr[0])] = trim($attr[1]);
+                }
+            }
+        } else if (is_array($this->parameters['searchAttributes'])) {
+            foreach($this->parameters['searchAttributes'] as $ldapAttr => $userField) {
+                if ($userField == '=') {
+                    $this->parameters['searchAttributes'][$ldapAttr] = $ldapAttr;
                 }
             }
         }
 
-        if (!isset($this->_params['newUserLdapAttributes']) || $this->_params['newUserLdapAttributes'] == '') {
-            $this->_params['newUserLdapAttributes'] = $this->_defaultNewUserAttributes;
+        if (!isset($this->parameters['newUserLdapAttributes']) || $this->parameters['newUserLdapAttributes'] == '') {
+            $this->parameters['newUserLdapAttributes'] = self::$defaultNewUserAttributes;
         } else {
-            $attrs = explode(",", $this->_params['newUserLdapAttributes']);
-            $this->_params['newUserLdapAttributes'] = array();
+            $attrs = explode(",", $this->parameters['newUserLdapAttributes']);
+            $this->parameters['newUserLdapAttributes'] = array();
             foreach ($attrs as $attr) {
                 if (strpos($attr, ':') !== false) {
                     $attr = explode(':', $attr);
-                    $this->_params['newUserLdapAttributes'][trim($attr[0])] = trim($attr[1]);
+                    $this->parameters['newUserLdapAttributes'][trim($attr[0])] = trim($attr[1]);
                 }
             }
         }
 
-        if ($this->_params['newUserDN'] == '' && $this->_params['featureCreateUser']) {
+        if ($this->parameters['newUserDN'] == '' && $this->parameters['featureCreateUser']) {
             throw new Exception('ldap configuration: no newUserDN config parameter');
         }
 
-        $uri = $this->_params['hostname'];
+        $uri = $this->parameters['hostname'];
 
         if (preg_match('!^ldap(s?)://!', $uri, $m)) { // old way to specify ldaps protocol
             $predefinedPort = '';
@@ -160,24 +193,24 @@ class Ldap
                 $predefinedPort = $mp[1];
             }
             if (isset($m[1]) && $m[1] == 's') {
-                $this->_params['tlsMode'] = 'ldaps';
+                $this->parameters['tlsMode'] = 'ldaps';
             }
-            elseif ($this->_params['tlsMode'] == 'ldaps') {
-                $this->_params['tlsMode'] = 'starttls';
+            elseif ($this->parameters['tlsMode'] == 'ldaps') {
+                $this->parameters['tlsMode'] = 'starttls';
             }
             if ($predefinedPort == '') {
-                $uri .= ':'.$this->_params['port'];
+                $uri .= ':'.$this->parameters['port'];
             }
             else {
-                $this->_params['port'] = $predefinedPort;
+                $this->parameters['port'] = $predefinedPort;
             }
             $this->uriConnect = $uri;
         }
         else {
-            $uri .= ':'.$this->_params['port'];
-            if ($this->_params['tlsMode'] == 'ldaps' || $this->_params['port'] == 636 ) {
+            $uri .= ':'.$this->parameters['port'];
+            if ($this->parameters['tlsMode'] == 'ldaps' || $this->parameters['port'] == 636 ) {
                 $this->uriConnect = 'ldaps://'.$uri;
-                $this->_params['tlsMode'] = 'ldaps';
+                $this->parameters['tlsMode'] = 'ldaps';
             }
             else {
                 $this->uriConnect = 'ldap://'.$uri;
@@ -190,77 +223,108 @@ class Ldap
      *
      * @return int a combination of FEATURE_* constants
      */
-    public function getFeatures()
+    public function getFeatures() : int
     {
         $feat = 0;
-        if ($this->_params['featureChangePassword']) {
+        if ($this->parameters['featureChangePassword']) {
             $feat |= self::FEATURE_CHANGE_PASSWORD;
         }
-        if ($this->_params['featureCreateUser']) {
+        if ($this->parameters['featureCreateUser']) {
             $feat |= self::FEATURE_CREATE_USER;
         }
-        if ($this->_params['featureDeleteUser']) {
+        if ($this->parameters['featureDeleteUser']) {
             $feat |= self::FEATURE_DELETE_USER;
+        }
+        if ($this->parameters['featureUpdateUser']) {
+            $feat |= self::FEATURE_UPDATE_USER;
         }
         return $feat;
     }
 
     /**
+     * Check if an LDAP account exists with this login
+     *
      * @param string $login
      * @return bool true if an account exists with this login
+     * @throws Exception
      */
-    public function userExists($login)
+    public function userExists(string $login) : bool
     {
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return false;
-        }
+
         // see if the user exists into the ldap directory
-        $result = $this->searchLdapUserAttributes($connectAdmin, $login);
+        $ldapEntry = $this->searchLdapUser($connectAdmin, $login);
         ldap_close($connectAdmin);
-        return ($result !== false);
+        return ($ldapEntry !== false);
     }
 
     /**
+     * Retrieve user attributes from the ldap directory
+     *
      * @param string $login
-     * @return UserLdapAttributes|null
+     * @param bool $loadAlsoGroups
+     * @return UserLdapAttributes|null  LDAP attributes of the user, or null if the user is not found
+     * @throws Exception
      */
-    public function getUser($login)
+    public function getUser(string $login, bool $loadAlsoGroups = false) : ?UserLdapAttributes
     {
-        if (!$this->userExists($login)) {
-            return null;
-        }
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
+
+        // see if the user exists into the ldap directory
+        $userAttrs = $this->searchLdapUserAttributes($connectAdmin, $login);
+
+        if ($userAttrs === false) {
+            ldap_close($connectAdmin);
             return null;
         }
-        // see if the user exists into the ldap directory
-        $result = $this->searchLdapUserAttributes($connectAdmin, $login);
-        //$this->searchUserGroups($connectAdmin, $userDn, $result, $login);
+
+        if ($loadAlsoGroups) {
+            $this->searchUserGroups($connectAdmin, $userAttrs, $login);
+        }
         ldap_close($connectAdmin);
-        return $result;
+        return $userAttrs;
     }
 
     /**
+     * Update user attributes into the ldap directory
+     *
+     * The flag featureUpdateUser should be set to true in the LDAP parameters
+     *
      * @param string $login
      * @param array $attributes list of attributes to change
-     * @return void
+     * @return bool  true if the user has been updated, false if it is not found.
+     * @throws Exception
      */
-    public function updateUser($login, array $attributes)
+    public function updateUser(string $login, array $attributes): bool
     {
-        if (!$this->userExists($login)) {
-            return ;
+        if (!$this->parameters['featureUpdateUser']) {
+            return false;
         }
+
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return ;
+
+        $ldapEntry = $this->searchLdapUser($connectAdmin, $login);
+        if ($ldapEntry === false) {
+            ldap_close($connectAdmin);
+            return false;
         }
-        $ldapAttributes = $this->searchLdapUserAttributes($connectAdmin, $login);
-        ldap_mod_replace($connectAdmin, $ldapAttributes->dn, $attributes);
+        $dn = ldap_get_dn($connectAdmin, $ldapEntry);
+        $result = ldap_mod_replace($connectAdmin, $dn, $attributes);
+        if (!$result) {
+            $msg = 'ldap: error when trying to update attributes for "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
+            ldap_close($connectAdmin);
+            throw new Exception($msg);
+        }
         ldap_close($connectAdmin);
+        return true;
     }
 
     /**
+     * Create a new user account in the LDAP directory
+     *
+     * The flag featureCreateUser should be set to true in the LDAP parameters
+     *
      * @param string $login
      * @param string $password
      * @param string $email
@@ -268,23 +332,20 @@ class Ldap
      * @return bool true if it has been successfully created
      * @throws Exception
      */
-    public function createUser($login, $password, $email, $name = '')
+    public function createUser(string $login, string $password, string $email, string $name = ''): bool
     {
-        if (!$this->_params['featureCreateUser']) {
+        if (!$this->parameters['featureCreateUser']) {
             return false;
         }
 
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return false;
-        }
 
         $ldapAttributes = $this->createLdapAttributes(array(
             'email' => $email,
             'realname' => $name ?: $login
         ));
 
-        foreach($this->_params['newUserLdapAttributes'] as $attr=>$val) {
+        foreach($this->parameters['newUserLdapAttributes'] as $attr=> $val) {
             if ($val[0] == '%') {
                 $val = str_replace(array('%%PASSWORD%%', '%%LOGIN%%', '%%REALNAME%%'),
                     array($this->hashPassword($password), $login, $name ?: $login),
@@ -294,33 +355,42 @@ class Ldap
             $ldapAttributes[$attr] = $val;
         }
 
-        $dn = $this->createDn($this->_params['newUserDN'], $login, $ldapAttributes);
+        $dn = $this->createDn($this->parameters['newUserDN'], $login, $ldapAttributes);
+        if ($dn === false) {
+            $msg = 'ldap: failed to create DN for user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg);
+            ldap_close($connectAdmin);
+            throw new Exception($msg);
+        }
+
         $result = @ldap_add ($connectAdmin , $dn, $ldapAttributes);
         if (!$result) {
-            //echo('ldap authentication: error when trying to create a user "'.$login.'": '.ldap_errno($connectAdmin).':'.ldap_error($connectAdmin));
-            $this->logError('ldap authentication: error when trying to create a user "'.$login.'": '.ldap_errno($connectAdmin).':'.ldap_error($connectAdmin));
+            $msg = 'ldap: error when trying to create a user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
+            ldap_close($connectAdmin);
+            throw new Exception($msg);
         }
         ldap_close($connectAdmin);
-        return $result;
+        return true;
     }
 
     /**
      * Delete a user from the ldap
      *
+     * The flag featureDeleteUser should be set to true in the LDAP parameters
+     *
      * @return UserLdapAttributes|bool
      *    the ldap attributes of the deleted user
      *    or true if the user is already deleted from the ldap
      *    or false if there is an issue
+     * @throws Exception
      */
-    public function deleteUser($login)
+    public function deleteUser($login): bool|UserLdapAttributes
     {
-        if (!$this->_params['featureDeleteUser']) {
+        if (!$this->parameters['featureDeleteUser']) {
             return false;
         }
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return false;
-        }
 
         // see if the user exists into the ldap directory
         $attributes = $this->searchLdapUserAttributes($connectAdmin, $login);
@@ -328,59 +398,68 @@ class Ldap
             ldap_close($connectAdmin);
             return true;
         }
-        //$this->searchUserGroups($connectAdmin, $userDn, $attributes, $login);
+
         $result = ldap_delete($connectAdmin, $attributes->dn);
+        if (!$result) {
+            $msg = 'ldap: error when trying to delete a user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
+            ldap_close($connectAdmin);
+            throw new Exception($msg);
+        }
         ldap_close($connectAdmin);
 
-        if (!$result) {
-            return false;
-        }
         return $attributes;
     }
 
     /**
+     * Delete a user from the ldap
+     *
+     * The flag featureChangePassword should be set to true in the LDAP parameters
+     *
      * @param string $login
-     * @param string $newpassword
+     * @param string $newPassword
      * @return bool true if the password has been changed
      * @throws Exception
      */
-    public function changePassword($login, $newpassword)
+    public function changePassword(string $login, string $newPassword): bool
     {
-        if (!$this->_params['featureChangePassword']) {
+        if (!$this->parameters['featureChangePassword']) {
             return false;
         }
 
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return false;
-        }
 
         // see if the user exists into the ldap directory
-        $attributes = $this->searchLdapUserAttributes($connectAdmin, $login);
-        if ($attributes === false) {
+        $ldapEntry = $this->searchLdapUser($connectAdmin, $login);
+        if ($ldapEntry === false) {
             ldap_close($connectAdmin);
             return false;
         }
+
+        $dn = ldap_get_dn($connectAdmin, $ldapEntry);
 
         $entry = array(
-            "userPassword" => $this->hashPassword($newpassword)
+            "userPassword" => $this->hashPassword($newPassword)
         );
 
-        if (ldap_modify($connectAdmin, $attributes->dn, $entry) === false) {
-            $this->logError('ldap error when trying to change password of user "'.$login.'": '.ldap_errno($connectAdmin).':'.ldap_error($connectAdmin));
+        if (ldap_modify($connectAdmin, $dn, $entry) === false) {
+            $msg = 'ldap: error when trying to change password of user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
             ldap_close($connectAdmin);
-            return false;
+            throw new Exception($msg);
         }
+
+        ldap_close($connectAdmin);
         return true;
     }
-
 
     /**
      * @param string $login
      * @param string $password
      * @return false|UserLdapAttributes
+     * @throws Exception
      */
-    public function verifyAuthentication($login, $password)
+    public function verifyAuthentication(string $login, string $password): false|UserLdapAttributes
     {
         if (trim($password) == '' || trim($login) == '') {
             // we don't want Unauthenticated Authentication
@@ -390,35 +469,35 @@ class Ldap
         }
 
         $connectAdmin = $this->_bindLdapAdminUser();
-        if (!$connectAdmin) {
-            return false;
-        }
 
         // see if the user exists into the ldap directory
         $attributes = $this->searchLdapUserAttributes($connectAdmin, $login);
         if ($attributes === false) {
-            $this->logError('ldap authentication: user '.$login.' not found into the ldap');
+            $this->log(self::LOG_DEBUG, 'ldap authentication: user '.$login.' not found into the ldap');
             ldap_close($connectAdmin);
             return false;
         }
 
-        $connect = $this->_getLinkId();
-        if (!$connect) {
-            $this->logError('ldap authentication: impossible to connect to ldap');
+        // open a second connection to check the given login/password by doing a ldap_bind
+        try {
+            $connect = $this->_getLinkId();
+        } catch(Exception $e) {
             ldap_close($connectAdmin);
-            return false;
+            $this->log(self::LOG_ERROR, 'ldap authentication: impossible to connect to ldap to check password');
+            throw $e;
         }
+
         // authenticate user. let's try with all configured DN
-        if ($this->_params['bindAttribute'] == 'dn') {
+        if ($this->parameters['bindAttribute'] == 'dn') {
             $bindDn = $attributes->dn;
         }
         else {
-            $bindDn = $attributes->ldapAttributes[$this->_params['bindAttribute']];
+            $bindDn = $attributes->ldapAttributes[$this->parameters['bindAttribute']];
         }
         $bind = @ldap_bind($connect, $bindDn, $password);
         if (!$bind) {
-            $this->logError('ldap authentication: cannot authenticate to ldap with given base DN for the login ' . $login. '. Wrong DN or password');
-            $this->logLdapError($connect, 'tried to connect with "'.$attributes->dn.'"');;
+            $this->log(self::LOG_DEBUG, 'ldap authentication: cannot authenticate to ldap with given base DN for the login ' . $login. '. Wrong DN or password');
+            $this->log(self::LOG_NOTICE, 'ldap authentication: failed to connect with "'.$attributes->dn.'"', $connect);
             ldap_close($connect);
             ldap_close($connectAdmin);
             return false;
@@ -433,19 +512,39 @@ class Ldap
     }
 
     /**
-     * @return UserLdapAttributes|false   ldap & user attributes or false if not found
+     * Search an ldap user and returns his ldap attributes
+     *
+     * @return UserLdapAttributes|false   ldap user attributes or false if not found
      */
-    protected function searchLdapUserAttributes($connect, $login)
+    protected function searchLdapUserAttributes(Connection $connect, string $login): false|UserLdapAttributes
     {
-        $searchAttributes = array_keys($this->_params['searchAttributes']);
-        if ($this->_params['bindAttribute'] != 'dn' && !isset($searchAttributes[$this->_params['bindAttribute']])) {
-            $searchAttributes[] = $this->_params['bindAttribute'];
+        $ldapEntry = $this->searchLdapUser($connect, $login);
+        if (!$ldapEntry) {
+            return false;
         }
-        foreach ($this->_params['searchUserBaseDN'] as $k => $baseDn) {
+        $dn = ldap_get_dn($connect, $ldapEntry);
+        $attributes = ldap_get_attributes($connect, $ldapEntry);
+        return $this->readLdapAttributes($dn, $attributes);
+    }
+
+    /**
+     * Search an LDAP user
+     *
+     * @param Connection $connect
+     * @param string $login
+     * @return false|ResultEntry False if the user is not found, else the result entry
+     */
+    protected function searchLdapUser(Connection $connect, string $login): ResultEntry|false
+    {
+        $searchAttributes = array_keys($this->parameters['searchAttributes']);
+        if ($this->parameters['bindAttribute'] != 'dn' && !isset($searchAttributes[$this->parameters['bindAttribute']])) {
+            $searchAttributes[] = $this->parameters['bindAttribute'];
+        }
+        foreach ($this->parameters['searchUserBaseDN'] as $k => $baseDn) {
             $filter = str_replace(
                 array('%%LOGIN%%', '%%USERNAME%%'), // USERNAME deprecated
                 $login,
-                $this->_params['searchUserFilter'][$k]
+                $this->parameters['searchUserFilter'][$k]
             );
             $search = @ldap_search(
                 $connect,
@@ -454,15 +553,13 @@ class Ldap
                 $searchAttributes
             );
             if (!$search) {
-                $this->logLdapError($connect, 'ldap: user "'.$login.'" not found with the DN "'.$baseDn.'" and filter "'.$filter.'"');
+                $this->log(self::LOG_DEBUG, 'ldap: user "'.$login.'" not found with the DN "'.$baseDn.'" and filter "'.$filter.'"', $connect);
             }
             else if (($entry = @ldap_first_entry($connect, $search))) {
-                $dn = ldap_get_dn($connect, $entry);
-                $attributes = ldap_get_attributes($connect, $entry);
-                return $this->readLdapAttributes($dn, $attributes);
+                return $entry;
             }
         }
-        $this->logError('ldap user "'.$login.'" not found');
+        $this->log(self::LOG_NOTICE, 'ldap user "'.$login.'" not found');
         return false;
     }
 
@@ -470,16 +567,16 @@ class Ldap
      * @param string $dnPattern
      * @param string $login
      * @param array $userLdapAttributes
-     * @return false|string
+     * @return false|string the dn of false if the DN cannot be created
      */
-    protected function createDn($dnPattern, $login, array $userLdapAttributes)
+    protected function createDn(string $dnPattern, string $login, array $userLdapAttributes): false|string
     {
         if (preg_match('/^\\$\w+$/', trim($dnPattern))) {
             $dnAttribute = substr($dnPattern, 1);
             if (isset($userLdapAttributes[$dnAttribute])) {
                 $realDn = $userLdapAttributes[$dnAttribute];
             } else {
-                $this->logError('ldap authentication, bindUser notice: attribute '.$dnAttribute.' not found into user attributes');
+                $this->log(self::LOG_ERROR, 'ldap: bindUser notice: attribute '.$dnAttribute.' not found into user attributes');
                 return false;
             }
         } elseif (preg_match_all('/(\w+)=%\?%/', $dnPattern, $m)) {
@@ -488,7 +585,7 @@ class Ldap
                 if (isset($userLdapAttributes[$attr])) {
                     $realDn = str_replace($m[0][$k], $attr.'='.$userLdapAttributes[$attr], $realDn);
                 } else {
-                    $this->logError('ldap authentication, bindUser notice: attribute '.$attr.' not found into user attributes');
+                    $this->log(self::LOG_ERROR, 'ldap: bindUser notice: attribute '.$attr.' not found into user attributes');
                     return false;
                 }
             }
@@ -509,9 +606,9 @@ class Ldap
      * @param array $origLdapAttributes list of values provided by ldap_get_attributes
      * @return UserLdapAttributes
      */
-    protected function readLdapAttributes($dn, $origLdapAttributes)
+    protected function readLdapAttributes(string $dn, array $origLdapAttributes): UserLdapAttributes
     {
-        $mapping = $this->_params['searchAttributes'];
+        $mapping = $this->parameters['searchAttributes'];
         $attrs = new UserLdapAttributes();
         foreach ($origLdapAttributes as $ldapAttr => $attr) {
             if (isset($attr['count']) && $attr['count'] > 0) {
@@ -550,10 +647,10 @@ class Ldap
      * @param array $values list of object attributes
      * @return array list of ldap attributes
      */
-    protected function createLdapAttributes($values)
+    protected function createLdapAttributes(array $values): array
     {
         $ldapAttributes = array();
-        foreach($this->_params['searchAttributes'] as $ldapAttr => $attr) {
+        foreach($this->parameters['searchAttributes'] as $ldapAttr => $attr) {
             if (isset($values[$attr])) {
                 $ldapAttributes[$ldapAttr] = $values[$attr];
             }
@@ -563,15 +660,16 @@ class Ldap
 
     /**
      * Fill the UserLdapAttributes groups properties with the ldap groups of the user
-     * @param $connect
+     * @param Connection $connect
      * @param UserLdapAttributes $userLdapAttributes
      * @param string $login
      * @return bool true if groups have been found
+     * @throws Exception
      */
-    protected function searchUserGroups($connect, $userLdapAttributes, $login)
+    protected function searchUserGroups(Connection $connect, UserLdapAttributes $userLdapAttributes, string $login): bool
     {
         // Do not search for groups if no group filter passed
-        if ($this->_params['searchGroupFilter'] == '') {
+        if ($this->parameters['searchGroupFilter'] == '') {
             return false;
         }
 
@@ -598,13 +696,13 @@ class Ldap
         $filter = str_replace(
             $searchStr,
             $values,
-            $this->_params['searchGroupFilter']
+            $this->parameters['searchGroupFilter']
         );
-        $grpProp = $this->_params['searchGroupProperty'];
+        $grpProp = $this->parameters['searchGroupProperty'];
 
         $search = ldap_search(
             $connect,
-            $this->_params['searchGroupBaseDN'],
+            $this->parameters['searchGroupBaseDN'],
             $filter,
             array($grpProp)
         );
@@ -621,71 +719,79 @@ class Ldap
                 return true;
             }
             else {
-                $this->logError('ldap authentication: no groups found for the user  "'.$login.'", with the searchGroupFilter query "'.$filter.'"');
+                $this->log(self::LOG_DEBUG, 'ldap: no groups found for the user  "'.$login.'", with the searchGroupFilter query "'.$filter.'"');
             }
         }
         else {
-            $this->logLdapError($connect, 'ldap error during group search for "'.$login.'", with the searchGroupFilter query "'.$filter.'"');
+            $msg = 'ldap error during group search for "'.$login.'", with the searchGroupFilter query "'.$filter.'"';
+            $this->log(self::LOG_ERROR, $msg, $connect);
+            ldap_close($connect);
+            throw new Exception('ldap error during group search for "'.$login.'"');
         }
         return false;
     }
 
     /**
      * open the connection to the ldap server
+     *
+     * @throws Exception
      */
-    protected function _getLinkId()
+    protected function _getLinkId() : Connection
     {
+        //ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, 7);
+
         if ($connect = @ldap_connect($this->uriConnect)) {
-            //ldap_set_option(NULL, LDAP_OPT_DEBUG_LEVEL, 7);
-            ldap_set_option($connect, LDAP_OPT_PROTOCOL_VERSION, $this->_params['protocolVersion']);
+            ldap_set_option($connect, LDAP_OPT_PROTOCOL_VERSION, $this->parameters['protocolVersion']);
             ldap_set_option($connect, LDAP_OPT_REFERRALS, 0);
 
-            if ($this->_params['tlsMode'] == 'starttls') {
+            if ($this->parameters['tlsMode'] == 'starttls') {
                 if (!@ldap_start_tls($connect)) {
-                    $this->logLdapError($connect, 'connection error: impossible to start TLS connection to '.$this->uriConnect);
-                    return false;
+                    $this->log(self::LOG_ERROR, 'ldap connection: impossible to start TLS connection to '.$this->uriConnect, $connect);
+                    throw new Exception('ldap connection: impossible to start TLS connection');
                 }
             }
             return $connect;
         }
-        $this->logError('authloginpass: ldap error, bad syntax in the given uri "'.$this->uriConnect.'"');
-        return false;
+        $this->log(self::LOG_ERROR, 'ldap connection: impossible to connect to ldap with the given uri "'.$this->uriConnect.'"');
+        throw new Exception('ldap connection: impossible to connect to ldap');
     }
 
     /**
      * open the connection to the ldap server
      * and bind to the admin user
-     * @return resource|false the ldap connection
+     * @return Connection|false the ldap connection
+     * @throws Exception
      */
-    protected function _bindLdapAdminUser()
+    protected function _bindLdapAdminUser(): false|Connection
     {
         $connect = $this->_getLinkId();
-        if (!$connect) {
-            $this->logError('ldap authentication: impossible to connect to ldap');
-            return false;
-        }
-
-        if ($this->_params['adminUserDn'] == '') {
+        if ($this->parameters['adminUserDn'] == '') {
             $bind = @ldap_bind($connect);
         } else {
-            $bind = @ldap_bind($connect, $this->_params['adminUserDn'], $this->_params['adminPassword']);
+            $bind = @ldap_bind($connect, $this->parameters['adminUserDn'], $this->parameters['adminPassword']);
         }
         if (!$bind) {
-            if ($this->_params['adminUserDn'] == '') {
-                $this->logError('ldap authentication: impossible to authenticate to ldap as anonymous admin user');
+            if ($this->parameters['adminUserDn'] == '') {
+                $this->log(self::LOG_ERROR, 'ldap connection: impossible to authenticate to ldap as anonymous admin user');
             } else {
-                $this->logError('ldap authentication: impossible to authenticate to ldap with admin user '.$this->_params['adminUserDn']);
+                $this->log(self::LOG_ERROR, 'ldap connection: impossible to authenticate to ldap with admin user '.$this->parameters['adminUserDn']);
             }
             ldap_close($connect);
-            return false;
+            throw new Exception('ldap connection: impossible to authenticate to ldap with the main user');
         }
         return $connect;
     }
 
-
-    protected function hashPassword($password)
+    /**
+     * Hashes a password using the specified LDAP hashing algorithm.
+     *
+     * @param string $password The plaintext password to be hashed.
+     * @return string The hashed password, formatted according to the specified algorithm.
+     * @throws Exception If an unknown hashing algorithm is specified.
+     */
+    protected function hashPassword(string $password) : string
     {
-        switch($this->_params['passwordLdapHashAlgo']) {
+        switch($this->parameters['passwordLdapHashAlgo']) {
             case 'SHA':
                 return "{SHA}" . base64_encode(pack( "H*", sha1( $password )));
             case 'SSHA':
@@ -699,18 +805,28 @@ class Ldap
             case '':
                 return $password;
             default:
-                throw new Exception("ldap hash password: Unknown algorithm '".$this->_params['passwordLdapHashAlgo']."'");
+                throw new Exception("ldap hash password: Unknown algorithm '".$this->parameters['passwordLdapHashAlgo']."'");
         }
     }
 
-    protected function generateSalt() {
-        $generator = (new \RandomLib\Factory)->getMediumStrengthGenerator();
-        $length = $this->_params['passwordLdapSaltLength'];
-        $salt = $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        return $salt;
+    /**
+     * Generates a cryptographic salt string for password handling.
+     *
+     * @return string a randomly generated alphanumeric string of the specified length
+     */
+    protected function generateSalt() : string
+    {
+        $generator = (new Factory)->getMediumStrengthGenerator();
+        $length = $this->parameters['passwordLdapSaltLength'];
+        return $generator->generateString($length, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
     }
 
-    protected function getLdapError($connect, $contextMessage)
+    /**
+     * @param Connection $connect
+     * @param string $contextMessage
+     * @return string
+     */
+    protected function getLdapError(Connection $connect, string $contextMessage): string
     {
         $message = "ldapdao error: $contextMessage \n";
         $message .= "\tldap error " . ldap_errno($connect) . ':' . ldap_error($connect);
@@ -720,24 +836,24 @@ class Ldap
         return $message;
     }
 
-    protected function log($message)
+    /**
+     * Logs a message of a specified type, optionally including LDAP error details.
+     *
+     * @param string $type The log type, used to determine the logger method.
+     * @param string $message The message to be logged.
+     * @param Connection|null $connect An optional connection object to retrieve LDAP error details.
+     * @return void
+     */
+    protected function log(string $type, string $message, ?Connection $connect = null)
     {
-        if ($this->logger) {
-            $this->logger->info($message);
+        if (!$this->logger) {
+            return;
         }
-    }
-
-    protected function logError($message)
-    {
-        if ($this->logger) {
-            $this->logger->error($message);
+        if ($connect) {
+            $message = $this->getLdapError($connect, $message);
         }
-    }
 
-    protected function logLdapError($connect, $contextMessage)
-    {
-        $this->logError($this->getLdapError($connect, $contextMessage));
+        $method = self::$loggerMethods[$type] ?? 'info';
+        $this->logger->$method($message);
     }
-
 }
-
