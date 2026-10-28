@@ -3,7 +3,7 @@
 #
 # from https://github.com/dinkel/docker-openldap
 # -----------------
-FROM debian:bullseye-slim
+FROM debian:trixie
 MAINTAINER Jelix
 
 # properly setup debian sources
@@ -27,4 +27,3 @@ EXPOSE 389 636
 ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["slapd", "-d", "32768", "-u", "openldap", "-g", "openldap", "-h", "ldap:/// ldaps:/// ldapi:///"]
-

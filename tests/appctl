@@ -14,8 +14,6 @@ fi
 CONTAINER_PREFIX=jelix_ldap
 
 case $COMMAND in
-    reset)
-        docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh reset;;
     composer-install)
         docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh composer_install;;
     composer-update)

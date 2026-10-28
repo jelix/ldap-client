@@ -27,6 +27,8 @@ services:
     container_name: jelix_ldap_php
     environment:
       TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+      LDAP_TLS_CRT_FILENAME: "ldap.jelix.crt"
+      LDAP_TLS_KEY_FILENAME: "ldap.jelix.key"
       APP_USER_ID: ${FPM_USER_ID}
       APP_GROUP_ID: ${FPM_GROUP_ID}
       DISPLAY_ERRORS: "on"
