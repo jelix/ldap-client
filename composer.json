@@ -1,5 +1,5 @@
 {
-    "name": "jelix/ldap-core",
+    "name": "jelix/ldap-authentication",
     "type": "library",
     "description": "library to authenticate against a Ldap server",
     "keywords": ["authentication", "jelix"],
