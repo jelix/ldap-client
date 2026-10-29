@@ -11,7 +11,17 @@ class UserLdapAttributes {
 
     public $dn = '';
 
+    /**
+     * Ldap attributes. Only the first value is given for multi-valued attributes
+     * @var array
+     */
     public $ldapAttributes = array();
+
+    /**
+     * All values of ldap attributes. Each item is an array of values.
+     * @var array
+     */
+    public $ldapAttributesValues = array();
 
     public $userAttributes = array();
 

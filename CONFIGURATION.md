@@ -39,8 +39,16 @@ Parameters for the connection configuration are:
 - `tlsMode`: the security mode for the connection.
 
 With `tlsMode`, you should indicate if you are using the ldap protocol 
-without encryption (`'tlsMode' => ''`), the ldap protocol with STARTTLS, 
+without encryption (`'tlsMode' => ''` or `'tlsMode' => 'none'`), the ldap protocol with STARTTLS, 
 (`'tlsMode' => 'starttls'`) or if you are using the ldaps protocol (`'tlsMode' => 'ldaps'`).
+Any other value is refused. The value is case-insensitive.
+
+**Warning**: without encryption, passwords of the admin user and of users are sent in clear
+text over the network. Use it only on a trusted network (or a local connection).
+
+When TLS is used, the certificate of the server is always verified, whatever the
+`TLS_REQCERT` value into `ldap.conf` or the `LDAPTLS_REQCERT` environment variable.
+TLS 1.2 is the minimum version of the protocol.
 
 If you use the standard port 389, you have the choice between no encryption (empty value)
 or `starttls`, for the `tlsMode` setting.
@@ -51,6 +59,11 @@ case, setting `tlsMode` to `ldaps` is optional.
 Since ldaps is deprecated in OpenLdap, the best solution is to use the port 389
 with `'tlsMode' => 'starttls'`.
 
+
+Other connection parameters:
+
+- `networkTimeout`: timeout in seconds to connect to the server (10 by default).
+- `timeLimit`: time limit in seconds for search operations (10 by default).
 
 Using client certificates and custom CA certificates
 ----------------------------------------------------
@@ -124,6 +137,11 @@ array(
 )
 ```
 
+Names of ldap attributes are case-insensitive. Ldap attributes are stored into
+the `ldapAttributes` property of `Jelix\Ldap\UserLdapAttributes` with the name
+given into `searchAttributes`. For multi-valued attributes, `ldapAttributes` contains
+only the first value. All values are available into the `ldapAttributesValues` property.
+
 Configuration properties for authentication
 -------------------------------------------
 
@@ -172,6 +190,20 @@ and the base DN `ou=FOO users,o=Microsoft,c=US`.
 
 If there is a result, the DN of the found entry will be used to "bind" to the ldap 
 server with the password given by the user. (set the `verifyAuthentication()` method).
+If several entries match the filter for a same base DN, the login is considered as
+ambiguous and an exception is thrown.
+
+Instead of the DN of the entry, you can indicate into `bindAttribute` an ldap attribute
+of the entry that contains the DN to use for the bind. If this attribute is missing or empty,
+the authentication fails.
+
+The login given to methods of the library is escaped before being inserted into filters, so
+characters like `*` or `(` are not interpreted. Logins having spaces at the beginning or at the
+end, or having control characters, are refused.
+
+Note that comparisons in ldap are often case-insensitive: `verifyAuthentication('JOHN', ...)`
+may authenticate the user `john`. Your application should use the login returned into
+the `UserLdapAttributes` object, not the login given by the user.
 
 Retrieving groups of the user
 -----------------------------
@@ -186,6 +218,7 @@ Example: `'searchGroupFilter' => "(&(objectClass=posixGroup)(member=%%USERDN%%))
 `%%USERDN%%` is replaced by the user dn.`%%LOGIN%%` is replaced by the login.  
 You can also use any ldap attributes you indicate into `searchAttributes`, 
 between `%%`. Example: `'searchGroupFilter' => "(&(objectClass=posixGroup)(member=%%givenName%%))"`
+All these values are escaped before being inserted into the filter.
 
 With `searchGroupProperty`, you must indicate the ldap attribute that
 contains the group name. Ex: `searchGroupProperty="cn"`.
@@ -210,3 +243,38 @@ To enable these features, you must set `true` to some LDAP parameters:
 - `featureUpdateUser` : to enable the modification of a user attributes, and to be able to call the method `updateUser()`
 - `featureDeleteUser` : to enable the deletion of a user, and to be able to call the method `deleteUser()`
 - `featureChangePassword` : to enable the modification of a user password, and to be able to call the method `changePassword()`
+
+`updateUser()` can modify only ldap attributes that are listed into `searchAttributes`.
+Passwords (`userPassword`, `unicodePwd`) and `objectClass` cannot be modified with this method.
+
+Creating users
+--------------
+
+- `newUserDN`: the DN of the new user. `%%LOGIN%%` is replaced by the login. You can also
+  use `<attribute>=%?%`, which is replaced by the value of the given attribute of the new user.
+  Values are escaped. Or you can indicate `$<attribute>`: the DN is the value of the
+  given attribute (this value is not escaped, it should be a valid DN).
+- `newUserLdapAttributes`: the ldap attributes of the new user. It can be a string
+  like `"objectClass:inetOrgPerson,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%"`
+  (indicate several times the same attribute for a multi-valued attribute), or an array
+  like `['objectClass' => ['inetOrgPerson', 'organizationalPerson'], 'cn' => '%%REALNAME%%']`.
+  Use an array if a value contains a comma. `%%LOGIN%%`, `%%REALNAME%%` and `%%PASSWORD%%`
+  placeholders can be used anywhere into values. By default, `objectClass`, `userPassword`,
+  `cn` and `sn` are set.
+
+Passwords
+---------
+
+With `passwordLdapHashAlgo`, you indicate how passwords are stored by `createUser()`
+and `changePassword()`:
+
+- `EXOP`: the password is sent to the server with the "Password Modify Extended Operation"
+  (RFC 3062). The server hashes the password with its own configuration and applies its
+  password policy. It is the recommended value if your server supports it (OpenLdap does,
+  Active Directory doesn't).
+- `CRYPT`: the password is hashed with SHA-512 crypt (`{CRYPT}$6$...`).
+- `SSHA`: salted SHA-1. The salt length is given by `passwordLdapSaltLength` (8 bytes minimum).
+- `SHA`, `MD5`, `SMD5`: weak algorithms, kept for compatibility. A warning is logged when they are used.
+- empty value (default): the password is not hashed by the library. Use it only if the
+  server hashes passwords itself (with the `ppolicy_hash_cleartext` option of OpenLdap for example).
+

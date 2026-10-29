@@ -1,10 +1,12 @@
 uid=testldap,ou=guest,dc=tests,dc=jelix
 uid=john,ou=people,dc=tests,dc=jelix
 uid=jane,ou=people,dc=tests,dc=jelix
+cn=Pierre (Paris)\, Jr,ou=people,dc=tests,dc=jelix
 uid=laurent,ou=admin,dc=tests,dc=jelix
 cn=group1,ou=groups,dc=tests,dc=jelix
 cn=group2,ou=groups,dc=tests,dc=jelix
 cn=admins,ou=groups,dc=tests,dc=jelix
+cn=group3,ou=groups,dc=tests,dc=jelix
 ou=groups,dc=tests,dc=jelix
 ou=people,dc=tests,dc=jelix
 ou=admin,dc=tests,dc=jelix

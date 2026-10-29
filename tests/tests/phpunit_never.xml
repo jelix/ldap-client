@@ -3,6 +3,8 @@
   <testsuites>
     <testsuite name="tests">
       <file>units/ldapnever_Test.php</file>
+      <file>units/ldapinternals_Test.php</file>
+      <file>units/ldapsecurity_Test.php</file>
     </testsuite>
   </testsuites>
 </phpunit>
