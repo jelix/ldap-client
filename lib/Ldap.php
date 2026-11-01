@@ -68,6 +68,29 @@ class Ldap
     );
 
     /**
+     * Default attributes of a new user, for Active Directory (passwordLdapHashAlgo=AD)
+     *
+     * The account is created disabled, and enabled after the password is set
+     * @var array
+     */
+    protected static $defaultNewUserAttributesAD = array(
+        "objectClass" => "user",
+        "sAMAccountName" => "%%LOGIN%%",
+        "cn" => "%%REALNAME%%",
+        "displayName" => "%%REALNAME%%",
+        "userAccountControl" => "514",
+    );
+
+    /** @var int flag of userAccountControl indicating a disabled account (Active Directory) */
+    protected const AD_UAC_ACCOUNTDISABLE = 0x2;
+
+    /** @var int flag of userAccountControl indicating that no password is required (Active Directory) */
+    protected const AD_UAC_PASSWD_NOTREQD = 0x20;
+
+    /** @var int userAccountControl value of a normal enabled account (Active Directory) */
+    protected const AD_UAC_NORMAL_ACCOUNT = 0x200;
+
+    /**
      * Ldap attributes that cannot be modified with updateUser()
      * (lower case names)
      * @var string[]
@@ -203,7 +226,9 @@ class Ldap
 
         $newUserAttrs = $this->parameters['newUserLdapAttributes'] ?? '';
         if ($newUserAttrs === '' || $newUserAttrs === array() || $newUserAttrs === null) {
-            $this->parameters['newUserLdapAttributes'] = self::$defaultNewUserAttributes;
+            $this->parameters['newUserLdapAttributes'] = $this->useActiveDirectoryPassword()
+                ? self::$defaultNewUserAttributesAD
+                : self::$defaultNewUserAttributes;
         } else if (is_string($newUserAttrs)) {
             $this->parameters['newUserLdapAttributes'] = array();
             foreach (explode(",", $newUserAttrs) as $attr) {
@@ -261,6 +286,10 @@ class Ldap
             else {
                 $this->uriConnect = 'ldap://'.$uri;
             }
+        }
+
+        if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '') {
+            throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"');
         }
     }
 
@@ -404,6 +433,7 @@ class Ldap
 
         $realName = $name ?: $login;
         $useExop = $this->usePasswordModifyExtendedOperation();
+        $useAD = $this->useActiveDirectoryPassword();
 
         $ldapAttributes = $this->createLdapAttributes(array(
             'email' => $email,
@@ -420,8 +450,8 @@ class Ldap
             foreach ((array) $values as $val) {
                 $val = (string) $val;
                 if (strpos($val, '%%PASSWORD%%') !== false) {
-                    if ($useExop) {
-                        // the password will be set by the server, after the creation
+                    if ($useExop || $useAD) {
+                        // the password will be set after the creation
                         continue;
                     }
                     if (!isset($replacements['%%PASSWORD%%'])) {
@@ -462,6 +492,10 @@ class Ldap
                 // we don't want an account without password
                 @ldap_delete($connectAdmin, $dn);
                 throw new Exception($msg);
+            }
+
+            if ($useAD) {
+                $this->setActiveDirectoryPasswordOfNewUser($connectAdmin, $dn, $login, $password, $ldapAttributes);
             }
             return true;
         } finally {
@@ -536,6 +570,10 @@ class Ldap
 
             if ($this->usePasswordModifyExtendedOperation()) {
                 $result = @ldap_exop_passwd($connectAdmin, $dn, '', $newPassword);
+            } else if ($this->useActiveDirectoryPassword()) {
+                $result = @ldap_mod_replace($connectAdmin, $dn, array(
+                    "unicodePwd" => $this->encodeActiveDirectoryPassword($newPassword)
+                ));
             } else {
                 $result = @ldap_modify($connectAdmin, $dn, array(
                     "userPassword" => $this->hashPassword($newPassword)
@@ -1065,6 +1103,73 @@ class Ldap
     }
 
     /**
+     * Indicates if passwords are stored into the unicodePwd attribute of Active Directory
+     */
+    protected function useActiveDirectoryPassword(): bool
+    {
+        return strtoupper($this->parameters['passwordLdapHashAlgo']) == 'AD';
+    }
+
+    /**
+     * Encodes a password for the unicodePwd attribute of Active Directory
+     *
+     * The password should be surrounded by double quotes, and encoded in UTF-16LE
+     *
+     * @param string $password the password, encoded in UTF-8
+     * @return string
+     * @throws Exception if the password is not a valid UTF-8 string
+     */
+    protected function encodeActiveDirectoryPassword(string $password): string
+    {
+        if (!preg_match('//u', $password)) {
+            throw new Exception('ldap: the password is not a valid UTF-8 string');
+        }
+        return iconv('UTF-8', 'UTF-16LE', '"'.$password.'"');
+    }
+
+    /**
+     * Sets the password of a new Active Directory account, and enables the account.
+     *
+     * The account is deleted if the password cannot be set (password policy...)
+     *
+     * @param Connection $connectAdmin
+     * @param string $dn DN of the new user
+     * @param string $login
+     * @param string $password
+     * @param array $ldapAttributes attributes given to create the account
+     * @throws Exception
+     */
+    protected function setActiveDirectoryPasswordOfNewUser(Connection $connectAdmin, string $dn, string $login, string $password, array $ldapAttributes): void
+    {
+        if (!@ldap_mod_replace($connectAdmin, $dn, array(
+            "unicodePwd" => $this->encodeActiveDirectoryPassword($password)
+        ))) {
+            $msg = 'ldap: error when trying to set the password of the new user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
+            // we don't want an account without password
+            @ldap_delete($connectAdmin, $dn);
+            throw new Exception($msg);
+        }
+
+        // enable the account, keeping other flags given into newUserLdapAttributes
+        $uac = self::AD_UAC_NORMAL_ACCOUNT;
+        foreach ($ldapAttributes as $attr => $value) {
+            if (strtolower($attr) == 'useraccountcontrol') {
+                $uac = (int) (is_array($value) ? $value[0] : $value);
+                break;
+            }
+        }
+        $uac &= ~(self::AD_UAC_ACCOUNTDISABLE | self::AD_UAC_PASSWD_NOTREQD);
+
+        if (!@ldap_mod_replace($connectAdmin, $dn, array("userAccountControl" => (string) $uac))) {
+            $msg = 'ldap: error when trying to enable the account of the new user "'.$login.'"';
+            $this->log(self::LOG_ERROR, $msg, $connectAdmin);
+            @ldap_delete($connectAdmin, $dn);
+            throw new Exception($msg);
+        }
+    }
+
+    /**
      * Hashes a password using the specified LDAP hashing algorithm.
      *
      * @param string $password The plaintext password to be hashed.
@@ -1100,7 +1205,7 @@ class Ldap
                 $this->log(self::LOG_NOTICE, 'ldap hash password: the password is not hashed by the library');
                 return $password;
             default:
-                // EXOP is not supported here: the password is never hashed by the library
+                // EXOP and AD are not supported here: the password is never hashed by the library
                 throw new Exception("ldap hash password: Unknown algorithm '".$this->parameters['passwordLdapHashAlgo']."'");
         }
     }

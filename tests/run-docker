@@ -24,6 +24,14 @@ if [ ! -f docker-conf/certs/ldap.jelix.crt ]; then
   )
 fi
 
+if [ ! -f docker-conf/certs/ad.jelix.crt ]; then
+  echo "generate certificates for the Samba Active Directory server"
+  (
+  cd docker-conf
+  ./ssl.sh createCert ad.jelix tests.jelix
+  )
+fi
+
 if [ ! -f docker-conf/certs/client.jelix.crt ]; then
   echo "generate certificates for the ldap client"
   (

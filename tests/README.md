@@ -31,3 +31,28 @@ Available commands:
 * `shell`: to have a shell inside the php container
 * `ldapshell`: to have a shell inside the ldap container
 
+* `adreset`: to restore default users in the Samba Active Directory server
+* `adusers` : to show users and groups defined in the Samba Active Directory server
+* `adshell`: to have a shell inside the Samba Active Directory container
+* `unit-tests-ad`: to launch only tests against the Samba Active Directory server
+
+Active Directory server
+-----------------------
+
+The `samba` container is a Samba server configured as an Active Directory domain
+controller, to test the library with `passwordLdapHashAlgo=AD`. It is reachable
+with the `ad.jelix` hostname, with STARTTLS on the port 389 or ldaps on the port 636.
+Its certificate is signed by the test CA (`docker-conf/certs/tests.jelix-CA.crt`).
+
+- realm `AD.JELIX`, base DN `DC=ad,DC=jelix`
+- admin: `CN=Administrator,CN=Users,DC=ad,DC=jelix`, password `Passjelix-123`
+- users `john` (`Passjohn-123`) and `jane` (`Passjane-123`) into `OU=People`,
+  `john` is member of the group `testgroup`
+- new users are created into `OU=Guests`
+
+The domain is provisioned at the first start of the container. To provision it again,
+remove the container (`./run-docker reset`).
+
+The password policy of the domain is the default one: passwords should have at
+least 7 characters, and contain characters of three categories among uppercase,
+lowercase, digits and symbols.

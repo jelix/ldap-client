@@ -6,9 +6,10 @@ shift
 if [ "$COMMAND" == "" ]; then
     echo "Error: command is missing"
     echo "Possible commands: clean_tmp, reset, install, rights, composer-install, composer-update"
-    echo " unit-tests, unit-tests-never, unit-tests-demand, unit-tests-allow"
+    echo " unit-tests, unit-tests-never, unit-tests-demand, unit-tests-allow, unit-tests-ad"
     echo " shell, shellroot"
-    echo " ldapreset, ldapusers"
+    echo " ldapreset, ldapusers, ldapshell"
+    echo " adreset, adusers, adshell"
     exit 1;
 fi
 
@@ -32,6 +33,14 @@ case $COMMAND in
       #docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh reset
       docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-demand
       docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_demand.xml $@
+      echo "------ Unit tests against a Samba Active Directory server"
+      docker exec -it ${CONTAINER_PREFIX}_ad /bin/ctl.sh reset
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_ad.xml $@
+      ;;
+    unit-tests-ad)
+      echo "------ Unit tests against a Samba Active Directory server"
+      docker exec -it ${CONTAINER_PREFIX}_ad /bin/ctl.sh reset
+      docker exec -t -i ${CONTAINER_PREFIX}_php appctl.sh unittests --process-isolation --configuration phpunit_ad.xml $@
       ;;
     unit-tests-never)
       echo "------ Unit tests against an ldap server that never ask a client certificate"
@@ -60,6 +69,15 @@ case $COMMAND in
        ;;
     ldapshell)
        docker exec -it ${CONTAINER_PREFIX}_server  /bin/bash -l
+     ;;
+    adreset)
+      docker exec -it ${CONTAINER_PREFIX}_ad /bin/ctl.sh reset
+      ;;
+    adusers)
+       docker exec -it ${CONTAINER_PREFIX}_ad /bin/ctl.sh showusers
+       ;;
+    adshell)
+       docker exec -it ${CONTAINER_PREFIX}_ad  /bin/bash -l
      ;;
     ldap-tls-never)
        docker exec -it ${CONTAINER_PREFIX}_server /bin/ctl.sh setup-tls-never

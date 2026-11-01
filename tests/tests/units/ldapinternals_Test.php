@@ -46,6 +46,11 @@ class LdapForTests extends Ldap
         return $this->hashPassword($password);
     }
 
+    public function testEncodeActiveDirectoryPassword(string $password) : string
+    {
+        return $this->encodeActiveDirectoryPassword($password);
+    }
+
     public function testcheckUpdatableAttributes(array $attributes): void
     {
         $this->checkUpdatableAttributes($attributes);
@@ -289,6 +294,60 @@ class ldapinternals_Test extends TestCase
         $ldap = new LdapForTests($config);
         $this->expectException(\Jelix\Ldap\Exception::class);
         $ldap->testHashPassword('secret');
+    }
+
+    function testHashPasswordADIsNotAllowed()
+    {
+        $config = $this->config;
+        $config['tlsMode'] = 'starttls';
+        $config['passwordLdapHashAlgo'] = 'AD';
+        $ldap = new LdapForTests($config);
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        $ldap->testHashPassword('secret');
+    }
+
+    function testADNeedsEncryption()
+    {
+        foreach (array('starttls', 'ldaps') as $tlsMode) {
+            $config = $this->config;
+            $config['tlsMode'] = $tlsMode;
+            $config['passwordLdapHashAlgo'] = 'AD';
+            $ldap = new LdapForTests($config);
+            $this->assertEquals($tlsMode, $ldap->getParameter('tlsMode'));
+        }
+
+        $config = $this->config;
+        $config['tlsMode'] = '';
+        $config['passwordLdapHashAlgo'] = 'ad';
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        new Ldap($config);
+    }
+
+    function testADDefaultNewUserLdapAttributes()
+    {
+        $config = $this->config;
+        $config['tlsMode'] = 'starttls';
+        $config['passwordLdapHashAlgo'] = 'AD';
+        $ldap = new LdapForTests($config);
+        $attributes = $ldap->getParameter('newUserLdapAttributes');
+        $this->assertEquals('user', $attributes['objectClass']);
+        $this->assertEquals('%%LOGIN%%', $attributes['sAMAccountName']);
+        $this->assertEquals('514', $attributes['userAccountControl']);
+        $this->assertArrayNotHasKey('userPassword', $attributes);
+    }
+
+    function testEncodeActiveDirectoryPassword()
+    {
+        $config = $this->config;
+        $config['tlsMode'] = 'starttls';
+        $config['passwordLdapHashAlgo'] = 'AD';
+        $ldap = new LdapForTests($config);
+
+        $this->assertEquals("\"\0p\0a\0s\0s\0\"\0", $ldap->testEncodeActiveDirectoryPassword('pass'));
+        $this->assertEquals("\"\0\xE9\0\xAC\x20\"\0", $ldap->testEncodeActiveDirectoryPassword('é€'));
+
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        $ldap->testEncodeActiveDirectoryPassword("pass\xE9");
     }
 
     function testLogEscapesControlCharacters()

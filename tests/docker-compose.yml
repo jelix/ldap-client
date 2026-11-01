@@ -20,6 +20,24 @@ services:
       default:
         aliases:
           - ldap.jelix
+  samba:
+    build: ./docker-conf/samba
+    container_name: jelix_ldap_ad
+    hostname: dc1
+    environment:
+      SAMBA_REALM: "AD.JELIX"
+      SAMBA_DOMAIN: "ADJELIX"
+      SAMBA_HOSTNAME: "dc1"
+      SAMBA_ADMIN_PASSWORD: "Passjelix-123"
+      SAMBA_TLS_CRT_FILENAME: "ad.jelix.crt"
+      SAMBA_TLS_KEY_FILENAME: "ad.jelix.key"
+      SAMBA_TLS_CA_CRT_FILENAME: "tests.jelix-CA.crt"
+    volumes:
+      - "./docker-conf/certs:/customcerts"
+    networks:
+      default:
+        aliases:
+          - ad.jelix
   php:
     build:
       context: ./docker-conf/phpfpm
@@ -38,3 +56,4 @@ services:
       - "./docker-conf/certs:/customcerts"
     depends_on:
       - openldap
+      - samba

@@ -1,3 +1,5 @@
 .idea
 vendor/*
 composer.lock
+.ai
+TODO.md

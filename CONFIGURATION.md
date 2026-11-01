@@ -272,8 +272,154 @@ and `changePassword()`:
   (RFC 3062). The server hashes the password with its own configuration and applies its
   password policy. It is the recommended value if your server supports it (OpenLdap does,
   Active Directory doesn't).
+- `AD`: for Microsoft Active Directory. The password is stored into the `unicodePwd`
+  attribute, encoded as expected by Active Directory, and the server applies its password
+  policy. An encrypted connection is required (`tlsMode` should be `starttls` or `ldaps`).
+  See the Active Directory example below.
 - `CRYPT`: the password is hashed with SHA-512 crypt (`{CRYPT}$6$...`).
 - `SSHA`: salted SHA-1. The salt length is given by `passwordLdapSaltLength` (8 bytes minimum).
 - `SHA`, `MD5`, `SMD5`: weak algorithms, kept for compatibility. A warning is logged when they are used.
 - empty value (default): the password is not hashed by the library. Use it only if the
   server hashes passwords itself (with the `ppolicy_hash_cleartext` option of OpenLdap for example).
+
+Example of configuration for an OpenLdap server
+-----------------------------------------------
+
+A typical OpenLdap directory stores users as `inetOrgPerson` entries, identified
+by their `uid` attribute, and groups as `groupOfNames` entries, listing the DN of
+their members into the `member` attribute.
+
+```php
+$config = array(
+    'hostname' => 'ldap.example.com',
+    'port' => 389,
+    'tlsMode' => 'starttls',
+    // if the server certificate is signed by a private CA
+    // 'clientTLSCACertificateFile' => '/etc/ssl/certs/example-CA.crt',
+
+    'adminUserDn' => 'cn=admin,dc=example,dc=com',
+    'adminPassword' => 'Sup3rP4ssw0rd',
+
+    // users
+    'searchUserBaseDN' => 'ou=people,dc=example,dc=com',
+    'searchUserFilter' => '(&(objectClass=inetOrgPerson)(uid=%%LOGIN%%))',
+    'searchAttributes' => 'uid:login,givenName:firstname,sn:lastname,displayName:realname,mail:email',
+    // the DN of the found entry is used to verify the password
+    'bindAttribute' => 'dn',
+
+    // groups
+    'searchGroupBaseDN' => 'ou=groups,dc=example,dc=com',
+    'searchGroupFilter' => '(&(objectClass=groupOfNames)(member=%%USERDN%%))',
+    'searchGroupProperty' => 'cn',
+
+    // management of user accounts
+    'featureChangePassword' => true,
+    'featureCreateUser' => true,
+    'featureUpdateUser' => true,
+    'featureDeleteUser' => true,
+    'newUserDN' => 'uid=%%LOGIN%%,ou=people,dc=example,dc=com',
+    'newUserLdapAttributes' => 'objectClass:inetOrgPerson,uid:%%LOGIN%%,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%',
+    'passwordLdapHashAlgo' => 'EXOP',
+);
+```
+
+If your groups are `posixGroup` entries, they list logins instead of DNs into
+the `memberUid` attribute. Use then this filter:
+`'searchGroupFilter' => '(&(objectClass=posixGroup)(memberUid=%%LOGIN%%))'`.
+
+The admin user must have the rights to read users and groups and, if you enable
+modification features, to write into `ou=people`. Remove the `feature*` parameters
+if you only need authentication.
+
+Example of configuration for a Microsoft Active Directory server
+----------------------------------------------------------------
+
+In Active Directory, users are `user` entries, and the login is usually stored into
+the `sAMAccountName` attribute. Users are often spread into several organizational
+units, so the base DN is generally the root of the domain. Groups are `group` entries,
+listing the DN of their members into the `member` attribute.
+
+```php
+$config = array(
+    'hostname' => 'dc01.corp.example.com',
+    'port' => 636,
+    'tlsMode' => 'ldaps',
+    // Active Directory certificates are often signed by the CA of the company
+    'clientTLSCACertificateFile' => '/etc/ssl/certs/corp-example-CA.crt',
+
+    // a service account having read access to the directory
+    'adminUserDn' => 'CN=svc-ldap,OU=Service Accounts,DC=corp,DC=example,DC=com',
+    'adminPassword' => 'Sup3rP4ssw0rd',
+
+    // users
+    'searchUserBaseDN' => 'DC=corp,DC=example,DC=com',
+    // exclude computer accounts and disabled accounts
+    'searchUserFilter' => '(&(objectCategory=person)(objectClass=user)(sAMAccountName=%%LOGIN%%)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))',
+    'searchAttributes' => 'sAMAccountName:login,givenName:firstname,sn:lastname,displayName:realname,mail:email,userPrincipalName:',
+    // the DN of the found entry is used to verify the password
+    'bindAttribute' => 'dn',
+
+    // groups
+    'searchGroupBaseDN' => 'DC=corp,DC=example,DC=com',
+    'searchGroupFilter' => '(&(objectClass=group)(member=%%USERDN%%))',
+    'searchGroupProperty' => 'cn',
+);
+```
+
+Notes:
+
+- Active Directory accepts STARTTLS on the port 389 too, if it has a certificate:
+  `'port' => 389, 'tlsMode' => 'starttls'`.
+- To find also groups containing the user indirectly (nested groups), you can use
+  the matching rule `LDAP_MATCHING_RULE_IN_CHAIN`:
+  `'searchGroupFilter' => '(&(objectClass=group)(member:1.2.840.113556.1.4.1941:=%%USERDN%%))'`.
+  This kind of search may be slow on large directories.
+- Active Directory accepts also the `userPrincipalName` (`john@corp.example.com`) to
+  bind a user. You could set `'bindAttribute' => 'userPrincipalName'`, but using the
+  DN is the most reliable.
+- Searching from the root of the domain on the port 389 or 636 may return "referrals"
+  to other partitions of the directory. If you have performance issues, set a more
+  specific `searchUserBaseDN`, or use the Global Catalog (port 3268, or 3269 with ldaps).
+
+### Managing Active Directory accounts
+
+Active Directory does not support the "Password Modify Extended Operation", and stores
+passwords into the `unicodePwd` attribute. To change passwords and to create users,
+set `passwordLdapHashAlgo` to `AD`, and enable features you need:
+
+```php
+$config = array(
+    // ... same parameters as above
+    'passwordLdapHashAlgo' => 'AD',
+    'featureChangePassword' => true,
+    'featureCreateUser' => true,
+    'featureUpdateUser' => true,
+    'featureDeleteUser' => true,
+    'newUserDN' => 'cn=%?%,OU=Users,DC=corp,DC=example,DC=com',
+    'newUserLdapAttributes' => array(
+        'objectClass' => 'user',
+        'sAMAccountName' => '%%LOGIN%%',
+        'userPrincipalName' => '%%LOGIN%%@corp.example.com',
+        'cn' => '%%REALNAME%%',
+        'displayName' => '%%REALNAME%%',
+        'userAccountControl' => '514',
+    ),
+);
+```
+
+- The service account must have the rights to create, modify and delete users into
+  the organizational unit, and the "Reset Password" right.
+- A new account is created disabled (`userAccountControl` = 514), then its password is set,
+  then the account is enabled: the "disabled" (0x2) and "password not required" (0x20) flags
+  are removed from the `userAccountControl` value given into `newUserLdapAttributes`
+  (or 512 is set if there is no such value). If the password is refused, for example
+  because it does not match the password policy of the domain, the account is deleted
+  and an exception is thrown. The reason is written into the logs.
+- If `newUserLdapAttributes` is empty, the attributes of the example above are used,
+  except `userPrincipalName`.
+- `sAMAccountName` is limited to 20 characters, and cannot contain
+  `" / \ [ ] : ; | = , + * ? < >`.
+- `changePassword()` resets the password with the service account: the password history
+  of the domain is not checked by Active Directory.
+- A user having child objects (some Exchange objects for example) cannot be deleted
+  by `deleteUser()`.
