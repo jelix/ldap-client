@@ -75,6 +75,7 @@ $ldap = new Ldap(array(
     'searchUserBaseDN' => 'ou=people,dc=example,dc=com',
     'searchUserFilter' => '(&(objectClass=inetOrgPerson)(uid=%%LOGIN%%))',
     'searchAttributes' => 'uid:login,givenName:firstname,sn:lastname,mail:email',
+    'featureGroupLoad' => true,
     'searchGroupFilter' => '(&(objectClass=groupOfNames)(member=%%USERDN%%))',
     'searchGroupProperty' => 'cn',
     'searchGroupBaseDN' => 'ou=groups,dc=example,dc=com',

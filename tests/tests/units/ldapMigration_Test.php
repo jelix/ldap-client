@@ -91,6 +91,55 @@ class ldapMigration_Test extends TestCase
             'featureCreateUser' => false,
             'featureUpdateUser' => false,
             'featureDeleteUser' => false,
+            'featureGroupLoad' => false,
         ), $newConfig);
+    }
+
+    public static function getGroupData()
+    {
+        return array(
+            'no group filter' => array(
+                array('searchGroupFilter' => '', 'searchGroupProperty' => 'cn', 'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix'),
+                false,
+                'ou=groups,dc=tests,dc=jelix',
+            ),
+            'no group property' => array(
+                array('searchGroupFilter' => '(member=%%USERDN%%)', 'searchGroupProperty' => '', 'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix'),
+                false,
+                'ou=groups,dc=tests,dc=jelix',
+            ),
+            'all group parameters' => array(
+                array('searchGroupFilter' => '(member=%%USERDN%%)', 'searchGroupProperty' => 'cn', 'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix'),
+                true,
+                'ou=groups,dc=tests,dc=jelix',
+            ),
+            'no group base DN' => array(
+                array('searchGroupFilter' => '(member=%%USERDN%%)', 'searchGroupProperty' => 'cn', 'searchGroupBaseDN' => ''),
+                true,
+                'ou=people,dc=tests,dc=jelix',
+            ),
+            'no group base DN, several user base DN' => array(
+                array('searchGroupFilter' => '(member=%%USERDN%%)', 'searchGroupProperty' => 'cn',
+                    'searchUserBaseDN' => array('dc=tests,dc=jelix', 'ou=people,dc=tests,dc=jelix')),
+                true,
+                'dc=tests,dc=jelix',
+            ),
+        );
+    }
+
+    #[DataProvider('getGroupData')]
+    public function testGroupMigration($groupConfig, $expectedFeature, $expectedBaseDN)
+    {
+        $config = array_merge(array(
+            'hostname' => 'ldap.jelix',
+            'searchUserBaseDN' => 'ou=people,dc=tests,dc=jelix',
+            'searchUserFilter' => '(&(objectClass=inetOrgPerson)(uid=%%LOGIN%%))',
+            'bindUserDN' => '$dn',
+        ), $groupConfig);
+
+        $newConfig = LdapMigration::migrateMultiauthConfiguration($config);
+
+        $this->assertSame($expectedFeature, $newConfig['featureGroupLoad']);
+        $this->assertEquals($expectedBaseDN, $newConfig['searchGroupBaseDN']);
     }
 }

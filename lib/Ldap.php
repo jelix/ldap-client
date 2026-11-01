@@ -33,6 +33,9 @@ class Ldap
     /** @var int the library can update user */
     const FEATURE_UPDATE_USER = 8;
 
+    /** @var int the library retrieves groups of the user */
+    const FEATURE_GROUP_LOAD = 16;
+
     protected const LOG_ERROR = 5;
     protected const LOG_WARNING = 4;
     protected const LOG_NOTICE = 3;
@@ -126,6 +129,7 @@ class Ldap
         'featureUpdateUser' => false,
         'featureDeleteUser' => false,
         'featureChangePassword' => false,
+        'featureGroupLoad' => false,
         'clientTLSCACertificateFile'=> '',
         'clientTLSCertificateFile'=> '',
         'clientTLSKeyFile'=> '',
@@ -256,6 +260,14 @@ class Ldap
             throw new Exception('ldap configuration: no newUserDN config parameter');
         }
 
+        if ($this->parameters['featureGroupLoad']) {
+            foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
+                if (trim((string) $this->parameters[$name]) === '') {
+                    throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled');
+                }
+            }
+        }
+
         $uri = $this->parameters['hostname'];
 
         if (preg_match('!^ldap(s?)://!', $uri, $m)) { // old way to specify ldaps protocol
@@ -313,6 +325,9 @@ class Ldap
         if ($this->parameters['featureUpdateUser']) {
             $feat |= self::FEATURE_UPDATE_USER;
         }
+        if ($this->parameters['featureGroupLoad']) {
+            $feat |= self::FEATURE_GROUP_LOAD;
+        }
         return $feat;
     }
 
@@ -339,7 +354,8 @@ class Ldap
      * Retrieve user attributes from the ldap directory
      *
      * @param string $login
-     * @param bool $loadAlsoGroups
+     * @param bool $loadAlsoGroups true to retrieve also groups of the user. Groups
+     *                              are retrieved only if featureGroupLoad is enabled.
      * @return UserLdapAttributes|null  LDAP attributes of the user, or null if the user is not found
      * @throws Exception
      */
@@ -654,7 +670,7 @@ class Ldap
                 ldap_close($connect);
             }
 
-            // retrieve the user group (if relevant)
+            // retrieve the user groups (if featureGroupLoad is enabled)
             $this->searchUserGroups($connectAdmin, $attributes, $login);
             return $attributes;
         } finally {
@@ -939,8 +955,7 @@ class Ldap
      */
     protected function searchUserGroups(Connection $connect, UserLdapAttributes $userLdapAttributes, string $login): bool
     {
-        // Do not search for groups if no group filter passed
-        if ($this->parameters['searchGroupFilter'] == '') {
+        if (!$this->parameters['featureGroupLoad']) {
             return false;
         }
 

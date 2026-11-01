@@ -296,6 +296,40 @@ class ldapinternals_Test extends TestCase
         $ldap->testHashPassword('secret');
     }
 
+    function testFeatureGroupLoad()
+    {
+        $config = $this->config;
+        $config['searchGroupFilter'] = '(&(objectClass=groupOfNames)(member=%%USERDN%%))';
+        $config['searchGroupProperty'] = 'cn';
+        $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
+
+        // group parameters without featureGroupLoad: groups are not loaded
+        $ldap = new LdapForTests($config);
+        $this->assertEquals(0, $ldap->getFeatures() & Ldap::FEATURE_GROUP_LOAD);
+
+        $config['featureGroupLoad'] = true;
+        $ldap = new LdapForTests($config);
+        $this->assertEquals(Ldap::FEATURE_GROUP_LOAD, $ldap->getFeatures() & Ldap::FEATURE_GROUP_LOAD);
+    }
+
+    function testFeatureGroupLoadNeedsGroupParameters()
+    {
+        foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
+            $config = $this->config;
+            $config['featureGroupLoad'] = true;
+            $config['searchGroupFilter'] = '(&(objectClass=groupOfNames)(member=%%USERDN%%))';
+            $config['searchGroupProperty'] = 'cn';
+            $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
+            $config[$name] = ' ';
+            try {
+                new Ldap($config);
+                $this->fail('an exception should be thrown when '.$name.' is empty');
+            } catch (\Jelix\Ldap\Exception $e) {
+                $this->assertStringContainsString($name, $e->getMessage());
+            }
+        }
+    }
+
     function testHashPasswordADIsNotAllowed()
     {
         $config = $this->config;

@@ -26,6 +26,7 @@ class ldapad_Test extends TestCase
         'searchGroupBaseDN' => 'DC=ad,DC=jelix',
         'searchGroupFilter' => '(&(objectClass=group)(member=%%USERDN%%))',
         'searchGroupProperty' => 'cn',
+        'featureGroupLoad' => true,
         'passwordLdapHashAlgo' => 'AD',
         'newUserDN' => 'cn=%?%,OU=Guests,DC=ad,DC=jelix',
         'featureCreateUser' => true,

@@ -200,11 +200,27 @@ class ldapsecurity_Test extends TestCase
             'searchGroupFilter' => '(&(objectClass=groupOfNames)(member=%%USERDN%%))',
             'searchGroupProperty' => 'cn',
             'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix',
+            'featureGroupLoad' => true,
         ));
         $attrs = $ldap->verifyAuthentication('pierre', 'passpierre');
         $this->assertIsObject($attrs);
         $this->assertEquals('cn=Pierre (Paris)\2C Jr,ou=people,dc=tests,dc=jelix', $attrs->dn);
         $this->assertEquals(array('group3'), $attrs->groups);
+    }
+
+    function testGroupsAreNotLoadedWithoutFeatureGroupLoad()
+    {
+        $ldap = $this->getLdap(array(
+            'searchGroupFilter' => '(&(objectClass=groupOfNames)(member=%%USERDN%%))',
+            'searchGroupProperty' => 'cn',
+            'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix',
+        ));
+        $attrs = $ldap->verifyAuthentication('pierre', 'passpierre');
+        $this->assertIsObject($attrs);
+        $this->assertNull($attrs->groups);
+        $attrs = $ldap->getUser('pierre', true);
+        $this->assertIsObject($attrs);
+        $this->assertNull($attrs->groups);
     }
 
     function testAttributesAreEscapedIntoGroupFilter()
@@ -215,6 +231,7 @@ class ldapsecurity_Test extends TestCase
             'searchGroupFilter' => '(&(objectClass=groupOfNames)(cn=%%description%%))',
             'searchGroupProperty' => 'cn',
             'searchGroupBaseDN' => 'ou=groups,dc=tests,dc=jelix',
+            'featureGroupLoad' => true,
         ));
         $attrs = $ldap->getUser('pierre', true);
         $this->assertIsObject($attrs);

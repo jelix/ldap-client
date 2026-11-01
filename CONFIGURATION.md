@@ -18,9 +18,10 @@ $config = array(
     'searchUserBaseDN' => "dc=XY,dc=fr",
     'searchUserFilter' => "(&(objectClass=posixAccount)(uid=%%LOGIN%%))",
     'searchAttributes' => "uid:login,givenName:firstname,sn:lastname,mail:email",
+    'featureGroupLoad' => true,
     'searchGroupFilter' => "(&(objectClass=posixGroup)(cn=XYZ*)(memberUid=%%LOGIN%%))",
     'searchGroupProperty' => "cn",
-    'searchGroupBaseDN' => '',
+    'searchGroupBaseDN' => "ou=groups,dc=XY,dc=fr",
 );
 
 $ldap = new Jelix\Ldap\Ldap($config);
@@ -210,7 +211,17 @@ Retrieving groups of the user
 
 You may want to retrieve the list of ldap groups where the user is in.
 
-You should then indicate into `searchGroupFilter` the ldap query that will
+This feature is disabled by default. To enable it, set `featureGroupLoad` to `true`,
+and fill the `searchGroupFilter`, `searchGroupProperty` and `searchGroupBaseDN`
+parameters. These three parameters are required when `featureGroupLoad` is `true`:
+an exception is thrown if one of them is empty.
+
+When the feature is enabled, groups are retrieved by `verifyAuthentication()`, and
+by `getUser()` when its `$loadAlsoGroups` parameter is `true`. They are stored into
+the `groups` property of the returned `Jelix\Ldap\UserLdapAttributes` object.
+When the feature is disabled, this property is `null`.
+
+You should indicate into `searchGroupFilter` the ldap query that will
 retrieve the groups of the user.
 
 Example: `'searchGroupFilter' => "(&(objectClass=posixGroup)(member=%%USERDN%%))"`
@@ -223,10 +234,8 @@ All these values are escaped before being inserted into the filter.
 With `searchGroupProperty`, you must indicate the ldap attribute that
 contains the group name. Ex: `searchGroupProperty="cn"`.
 
-You may also indicate the base DN for the search, into `searchGroupBaseDN`. Example:
+With `searchGroupBaseDN`, you must indicate the base DN for the search. Example:
 `'searchGroupBaseDN' => "ou=Groups,dc=Acme,dc=pt"`.
-
-If you don't want the loading of the groups list, leave `searchGroupFilter` empty.
 
 
 Enable ldap modification features
@@ -308,6 +317,7 @@ $config = array(
     'bindAttribute' => 'dn',
 
     // groups
+    'featureGroupLoad' => true,
     'searchGroupBaseDN' => 'ou=groups,dc=example,dc=com',
     'searchGroupFilter' => '(&(objectClass=groupOfNames)(member=%%USERDN%%))',
     'searchGroupProperty' => 'cn',
@@ -360,6 +370,7 @@ $config = array(
     'bindAttribute' => 'dn',
 
     // groups
+    'featureGroupLoad' => true,
     'searchGroupBaseDN' => 'DC=corp,DC=example,DC=com',
     'searchGroupFilter' => '(&(objectClass=group)(member=%%USERDN%%))',
     'searchGroupProperty' => 'cn',

@@ -142,6 +142,7 @@ class ldapdemand_Test  extends TestCase {
         $config['searchGroupFilter'] = '(&(objectClass=groupOfNames)(member=%%USERDN%%))';
         $config['searchGroupProperty'] = 'cn';
         $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
+        $config['featureGroupLoad'] = true;
         $ldap = new Ldap($config);
         $ldapAttr = $ldap->verifyAuthentication('john', 'passjohn');
         $this->assertIsObject($ldapAttr);

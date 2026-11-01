@@ -36,6 +36,23 @@ class LdapMigration
         $configuration['featureUpdateUser'] = false;
         $configuration['featureDeleteUser'] = false;
 
+        // groups were loaded as soon as a group filter was given
+        $configuration['featureGroupLoad'] = (
+            trim((string) ($configuration['searchGroupFilter'] ?? '')) !== ''
+            && trim((string) ($configuration['searchGroupProperty'] ?? '')) !== ''
+        );
+        if ($configuration['featureGroupLoad'] && trim((string) ($configuration['searchGroupBaseDN'] ?? '')) === '') {
+            // the base DN is now required: we take the base DN used to search users
+            $userBaseDN = $configuration['searchUserBaseDN'] ?? '';
+            if (is_array($userBaseDN)) {
+                $userBaseDN = reset($userBaseDN);
+            }
+            $configuration['searchGroupBaseDN'] = (string) $userBaseDN;
+            if ($configuration['searchGroupBaseDN'] === '') {
+                $configuration['featureGroupLoad'] = false;
+            }
+        }
+
         return $configuration;
     }
 
