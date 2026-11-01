@@ -296,6 +296,7 @@ class Ldap
      */
     public function userExists(string $login) : bool
     {
+        $login = trim($login, " ");
         $connectAdmin = $this->_bindLdapAdminUser();
         try {
             // see if the user exists into the ldap directory
@@ -315,6 +316,7 @@ class Ldap
      */
     public function getUser(string $login, bool $loadAlsoGroups = false) : ?UserLdapAttributes
     {
+        $login = trim($login, " ");
         $connectAdmin = $this->_bindLdapAdminUser();
         try {
             // see if the user exists into the ldap directory
@@ -350,6 +352,8 @@ class Ldap
         if (!$this->parameters['featureUpdateUser']) {
             return false;
         }
+
+        $login = trim($login, " ");
 
         $this->checkUpdatableAttributes($attributes);
 
@@ -481,6 +485,9 @@ class Ldap
         if (!$this->parameters['featureDeleteUser']) {
             return false;
         }
+
+        $login = trim($login, " ");
+
         $connectAdmin = $this->_bindLdapAdminUser();
         try {
             // see if the user exists into the ldap directory
@@ -516,6 +523,7 @@ class Ldap
             return false;
         }
 
+        $login = trim($login, " ");
         $connectAdmin = $this->_bindLdapAdminUser();
         try {
             // see if the user exists into the ldap directory
@@ -559,6 +567,7 @@ class Ldap
      */
     public function verifyAuthentication(string $login, string $password): false|UserLdapAttributes
     {
+        $login = trim($login, " ");
         if (trim($password) == '' || trim($login) == '') {
             // we don't want Unauthenticated Authentication
             // and Anonymous Authentication
@@ -613,6 +622,7 @@ class Ldap
         } finally {
             ldap_close($connectAdmin);
         }
+        return false;
     }
 
     /**

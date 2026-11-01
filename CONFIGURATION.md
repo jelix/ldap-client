@@ -198,8 +198,8 @@ of the entry that contains the DN to use for the bind. If this attribute is miss
 the authentication fails.
 
 The login given to methods of the library is escaped before being inserted into filters, so
-characters like `*` or `(` are not interpreted. Logins having spaces at the beginning or at the
-end, or having control characters, are refused.
+characters like `*` or `(` are not interpreted. Logins having control characters, are refused. Spaces at the beginning 
+or at the end of the login are removed before the search.
 
 Note that comparisons in ldap are often case-insensitive: `verifyAuthentication('JOHN', ...)`
 may authenticate the user `john`. Your application should use the login returned into
@@ -277,4 +277,3 @@ and `changePassword()`:
 - `SHA`, `MD5`, `SMD5`: weak algorithms, kept for compatibility. A warning is logged when they are used.
 - empty value (default): the password is not hashed by the library. Use it only if the
   server hashes passwords itself (with the `ppolicy_hash_cleartext` option of OpenLdap for example).
-

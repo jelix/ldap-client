@@ -371,10 +371,10 @@ class ldapsecurity_Test extends TestCase
     function testLoginWithSpacesOrControlCharsIsRefused()
     {
         $ldap = $this->getLdap();
-        $this->assertFalse($ldap->userExists(' john'));
-        $this->assertFalse($ldap->userExists('john '));
+        $this->assertTrue($ldap->userExists(' john'));
+        $this->assertTrue($ldap->userExists('john '));
         $this->assertFalse($ldap->userExists("john\n"));
-        $this->assertFalse($ldap->verifyAuthentication(' john', 'passjohn'));
+        $this->assertIsObject($ldap->verifyAuthentication(' john', 'passjohn'));
         $this->assertFalse($ldap->verifyAuthentication("john\r\n", 'passjohn'));
 
         $this->expectException(LdapException::class);
