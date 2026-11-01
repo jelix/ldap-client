@@ -57,7 +57,7 @@ Installation
 ------------
 
 ```shell
-composer require jelix/ldap-authentication
+composer require jelix/ldap-client
 ```
 
 Usage

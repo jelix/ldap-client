@@ -1,7 +1,7 @@
 {
-    "name": "jelix/ldap-authentication",
+    "name": "jelix/ldap-client",
     "type": "library",
-    "description": "library to authenticate against a Ldap server",
+    "description": "library to authenticate against an Ldap server or Active Directory. Users accounts can also be managed.",
     "keywords": ["authentication", "jelix"],
     "license": "MIT",
     "authors": [
@@ -29,7 +29,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-master": "0.1.x-dev"
+            "dev-master": "1.0.x-dev"
         }
     },
     "minimum-stability": "stable"
