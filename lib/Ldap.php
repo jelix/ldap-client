@@ -332,6 +332,23 @@ class Ldap
     }
 
     /**
+     * Try to connect to the ldap server and bind with the admin credentials.
+     * Can be used to implement a "test connection" button of an UI for example.
+     *
+     * @return bool|string true if it is ok, else the error message
+     */
+    public function testConnection()
+    {
+        try {
+            $connectAdmin = $this->_bindLdapAdminUser();
+            ldap_close($connectAdmin);
+            return true;
+        } catch(Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
+    /**
      * Check if an LDAP account exists with this login
      *
      * @param string $login
