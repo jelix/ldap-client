@@ -16,7 +16,7 @@ use Psr\Log\LoggerInterface;
  *
  * @internal see https://tools.ietf.org/html/rfc4510
  */
-class Ldap
+class LdapClient
 {
     /** @var int the library does not implement specific features */
     const FEATURE_NONE = 0;

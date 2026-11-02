@@ -4,7 +4,7 @@ Configuration of the ldap library
 General configuration
 ---------------------
 
-All configuration parameters should be given to the constructor of the `Jelix\Ldap\Ldap` object.
+All configuration parameters should be given to the constructor of the `Jelix\Ldap\LdapClient` object.
 
 Example of a such array:
 
@@ -24,7 +24,7 @@ $config = array(
     'searchGroupBaseDN' => "ou=groups,dc=XY,dc=fr",
 );
 
-$ldap = new Jelix\Ldap\Ldap($config);
+$ldap = new Jelix\Ldap\LdapClient($config);
 
 ```
 
@@ -82,7 +82,7 @@ openldap settings are global to the PHP process and can affect other PHP applica
 If you are using PHP-FPM, you can configure a pool dedicated to your application, so processes are not shared
 with other applications.
 
-An other solution is to use the Ldap class in a separate process by using the php function `proc_open()` and
+Another solution is to use the LdapClient class in a separate process by using the php function `proc_open()` and
 other proc functions.
 
 
@@ -150,7 +150,7 @@ Before to try to authenticate the user against the ldap, the library search and 
 user properties from the ldap. It uses three configuration parameters : `searchUserBaseDN`,
 `searchUserFilter` and `searchAttributes`.
 
-The `searchUserBaseDN` parameter indicates the path of the Ldap subtree to search in. 
+The `searchUserBaseDN` parameter indicates the path of the LDAP subtree to search in. 
 Example: `'searchUserBaseDN' => "ou=ADAM users,o=Microsoft,c=US"`.
 
 The `searchUserFilter` should contain the ldap query, and a `%%LOGIN%%` placeholder

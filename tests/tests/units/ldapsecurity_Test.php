@@ -5,7 +5,7 @@
  * @link        https://www.jelix.org
  * @licence     MIT
  */
-use Jelix\Ldap\Ldap;
+use Jelix\Ldap\LdapClient;
 use Jelix\Ldap\Exception as LdapException;
 use PHPUnit\Framework\TestCase;
 
@@ -36,9 +36,9 @@ class ldapsecurity_Test extends TestCase
         'clientTLSCACertificateFile' => '/customcerts/tests.jelix-CA.crt'
     );
 
-    protected function getLdap(array $config = array()): Ldap
+    protected function getLdap(array $config = array()): LdapClient
     {
-        return new Ldap(array_merge($this->ldapProfile, $config), new TestLogger());
+        return new LdapClient(array_merge($this->ldapProfile, $config), new TestLogger());
     }
 
     /**
@@ -437,7 +437,7 @@ class ldapsecurity_Test extends TestCase
     {
         $config = $this->ldapProfile;
         unset($config['newUserLdapAttributes']);
-        $ldap = new Ldap($config, new TestLogger());
+        $ldap = new LdapClient($config, new TestLogger());
         $login = 'testsecudefault';
         try {
             $this->assertTrue($ldap->createUser($login, 'passdefault', 'default@tests.jelix', 'Default User'));

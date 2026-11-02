@@ -64,9 +64,9 @@ Usage
 -----
 
 ```php
-use Jelix\Ldap\Ldap;
+use Jelix\Ldap\LdapClient;
 
-$ldap = new Ldap(array(
+$ldap = new LdapClient(array(
     'hostname' => 'ldap.example.com',
     'port' => 389,
     'tlsMode' => 'starttls',
@@ -109,7 +109,7 @@ All configuration parameters are described into [CONFIGURATION.md](CONFIGURATION
 Tests
 -----
 
-Tests are run against an OpenLdap server, in Docker containers.
+Tests are run against an OpenLdap server and a Samba server (Active Directory), in Docker containers.
 See [tests/README.md](tests/README.md).
 
 License

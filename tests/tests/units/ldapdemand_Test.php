@@ -5,7 +5,7 @@
  * @link        https://www.jelix.org
  * @licence     MIT
  */
-use Jelix\Ldap\Ldap;
+use Jelix\Ldap\LdapClient;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -52,14 +52,14 @@ class ldapdemand_Test  extends TestCase {
         $config['clientTLSCertificateFile'] = '';
         $config['clientTLSKeyFile'] = '';
         $this->expectException(\Jelix\Ldap\Exception::class);
-        $ldap = new Ldap($config, new TestLogger());
+        $ldap = new LdapClient($config, new TestLogger());
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
     }
 
     function testUserExists() {
         $config = $this->ldapProfile;
-        $ldap = new Ldap($config, new TestLogger());
+        $ldap = new LdapClient($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -71,7 +71,7 @@ class ldapdemand_Test  extends TestCase {
         $config['tlsMode'] = 'ldaps';
         $config['port'] = 636;
 
-        $ldap = new Ldap($config, new TestLogger());
+        $ldap = new LdapClient($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -86,7 +86,7 @@ class ldapdemand_Test  extends TestCase {
         $config['clientTLSKeyFile'] = '';
         $this->expectException(\Jelix\Ldap\Exception::class);
 
-        $ldap = new Ldap($config, new TestLogger());
+        $ldap = new LdapClient($config, new TestLogger());
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
@@ -96,7 +96,7 @@ class ldapdemand_Test  extends TestCase {
     {
         $config = $this->ldapProfile;
 
-        $ldap = new Ldap($config);
+        $ldap = new LdapClient($config);
         $ldapAttr = $ldap->getUser('john');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('uid=john,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
@@ -119,7 +119,7 @@ class ldapdemand_Test  extends TestCase {
 
         $config = $this->ldapProfile;
         //$config['searchUserBaseDN'] = 'ou=admins,dc=tests,dc=jelix';
-        $ldap = new Ldap($config);
+        $ldap = new LdapClient($config);
         $ldapAttr = $ldap->getUser('laurent');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('uid=laurent,ou=admins,dc=tests,dc=jelix', $ldapAttr->dn);
@@ -143,7 +143,7 @@ class ldapdemand_Test  extends TestCase {
         $config['searchGroupProperty'] = 'cn';
         $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
         $config['featureGroupLoad'] = true;
-        $ldap = new Ldap($config);
+        $ldap = new LdapClient($config);
         $ldapAttr = $ldap->verifyAuthentication('john', 'passjohn');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('uid=john,ou=people,dc=tests,dc=jelix', $ldapAttr->dn);
@@ -163,7 +163,7 @@ class ldapdemand_Test  extends TestCase {
 
     function testVerifyPasswordWithLaurent()
     {
-        $ldap = new Ldap($this->ldapProfile);
+        $ldap = new LdapClient($this->ldapProfile);
         $ldapAttr = $ldap->verifyAuthentication('laurent', 'passlaurent');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('uid=laurent,ou=admins,dc=tests,dc=jelix', $ldapAttr->dn);
@@ -181,7 +181,7 @@ class ldapdemand_Test  extends TestCase {
     }
 
     function testCreateUser() {
-        $ldap = new Ldap($this->ldapProfile);
+        $ldap = new LdapClient($this->ldapProfile);
         $this->assertTrue($ldap->createUser('testldap', 'passrobert', 'robert@tests.jelix', 'Robert Dupont'));
         $this->assertTrue($ldap->userExists('testldap'));
         $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert');
@@ -204,7 +204,7 @@ class ldapdemand_Test  extends TestCase {
      * @depends testCreateUser
      */
     function testChangePassword() {
-        $ldap = new Ldap($this->ldapProfile);
+        $ldap = new LdapClient($this->ldapProfile);
         $this->assertTrue($ldap->changePassword('testldap', 'passrobert2'));
         $this->assertTrue($ldap->userExists('testldap'));
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
@@ -231,7 +231,7 @@ class ldapdemand_Test  extends TestCase {
     function testChangeHashedPassword() {
         $config = $this->ldapProfile;
         $config['passwordLdapHashAlgo'] = 'SSHA';
-        $ldap = new Ldap($config);
+        $ldap = new LdapClient($config);
         $this->assertTrue($ldap->changePassword('testldap', 'passroberthashed'));
         $this->assertTrue($ldap->userExists('testldap'));
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
@@ -256,7 +256,7 @@ class ldapdemand_Test  extends TestCase {
      * @depends testChangePassword
      */
     function testDeleteUser() {
-        $ldap = new Ldap($this->ldapProfile);
+        $ldap = new LdapClient($this->ldapProfile);
         $ldapAttr = $ldap->deleteUser('testldap');
         $this->assertIsObject($ldapAttr);
         $this->assertTrue($ldap->deleteUser('testldap'));

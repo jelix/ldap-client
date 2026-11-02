@@ -5,7 +5,7 @@
  * @link        https://www.jelix.org
  * @licence     MIT
  */
-use Jelix\Ldap\Ldap;
+use Jelix\Ldap\LdapClient;
 use Jelix\Ldap\UserLdapAttributes;
 use LDAP\Connection;
 use PHPUnit\Framework\TestCase;
@@ -14,7 +14,7 @@ use Psr\Log\AbstractLogger;
 /**
  * Gives access to protected methods of the Ldap class
  */
-class LdapForTests extends Ldap
+class LdapClientForTests extends LdapClient
 {
     public function __call($name, $arguments)
     {
@@ -98,7 +98,7 @@ class ldapinternals_Test extends TestCase
                  ) as $value => $expected) {
             $config = $this->config;
             $config['tlsMode'] = $value;
-            $ldap = new LdapForTests($config);
+            $ldap = new LdapClientForTests($config);
             $this->assertEquals($expected, $ldap->getParameter('tlsMode'), 'tlsMode='.$value);
         }
     }
@@ -108,7 +108,7 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['tlsMode'] = 'tls';
         $this->expectException(\Jelix\Ldap\Exception::class);
-        new Ldap($config);
+        new LdapClient($config);
     }
 
     function testNewUserLdapAttributesAsString()
@@ -116,7 +116,7 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['newUserLdapAttributes'] = "objectClass:inetOrgPerson, objectClass:organizationalPerson,".
             "userPassword:%%PASSWORD%%,description:Account of %%LOGIN%%: created by tests,cn:%%REALNAME%%";
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->assertEquals(array(
             'objectClass' => array('inetOrgPerson', 'organizationalPerson'),
             'userPassword' => '%%PASSWORD%%',
@@ -132,13 +132,13 @@ class ldapinternals_Test extends TestCase
             'objectClass' => array('inetOrgPerson', 'organizationalPerson'),
             'description' => 'Account, of %%LOGIN%%',
         );
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->assertEquals($config['newUserLdapAttributes'], $ldap->getParameter('newUserLdapAttributes'));
     }
 
     function testDefaultNewUserLdapAttributesHaveRequiredAttributes()
     {
-        $ldap = new LdapForTests($this->config);
+        $ldap = new LdapClientForTests($this->config);
         $attributes = $ldap->getParameter('newUserLdapAttributes');
         $this->assertArrayHasKey('cn', $attributes);
         $this->assertArrayHasKey('sn', $attributes);
@@ -146,7 +146,7 @@ class ldapinternals_Test extends TestCase
 
     function testIsValidLogin()
     {
-        $ldap = new LdapForTests($this->config);
+        $ldap = new LdapClientForTests($this->config);
         $this->assertTrue($ldap->testIsValidLogin('john'));
         $this->assertTrue($ldap->testIsValidLogin('john.doe@example.com'));
         $this->assertTrue($ldap->testIsValidLogin('jean dupont'));
@@ -162,7 +162,7 @@ class ldapinternals_Test extends TestCase
 
     function testCreateDnEscapesLogin()
     {
-        $ldap = new LdapForTests($this->config);
+        $ldap = new LdapClientForTests($this->config);
         $this->assertEquals(
             'uid=evil\2cou\3dadmins,ou=guest,dc=tests,dc=jelix',
             $ldap->testCreateDn('uid=%%LOGIN%%,ou=guest,dc=tests,dc=jelix', 'evil,ou=admins', array())
@@ -175,7 +175,7 @@ class ldapinternals_Test extends TestCase
 
     function testCreateDnEscapesAttributeValues()
     {
-        $ldap = new LdapForTests($this->config);
+        $ldap = new LdapClientForTests($this->config);
         $this->assertEquals(
             'cn=Doe\2c John,ou=guest,dc=tests,dc=jelix',
             $ldap->testCreateDn('cn=%?%,ou=guest,dc=tests,dc=jelix', 'john', array('cn' => 'Doe, John'))
@@ -191,7 +191,7 @@ class ldapinternals_Test extends TestCase
 
     function testCreateDnFromAttribute()
     {
-        $ldap = new LdapForTests($this->config);
+        $ldap = new LdapClientForTests($this->config);
         $this->assertEquals(
             'uid=john,ou=guest,dc=tests,dc=jelix',
             $ldap->testCreateDn(' $mydn ', 'john', array('mydn' => 'uid=john,ou=guest,dc=tests,dc=jelix'))
@@ -202,7 +202,7 @@ class ldapinternals_Test extends TestCase
     {
         $config = $this->config;
         $config['searchAttributes'] = 'UID:login,displayname:realname,mail:email,givenName:firstname';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         // structure returned by ldap_get_attributes
         $attrs = $ldap->testReadLdapAttributes('uid=john,ou=people,dc=tests,dc=jelix', array(
             'uid' => array('john', 'count' => 1),
@@ -236,7 +236,7 @@ class ldapinternals_Test extends TestCase
     {
         $config = $this->config;
         $config['passwordLdapHashAlgo'] = 'SSHA';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $hash = $ldap->testHashPassword('secret');
         $this->assertStringStartsWith('{SSHA}', $hash);
         $raw = base64_decode(substr($hash, 6));
@@ -251,12 +251,12 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['passwordLdapHashAlgo'] = 'SSHA';
         $config['passwordLdapSaltLength'] = 16;
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->assertEquals(36, strlen(base64_decode(substr($ldap->testHashPassword('secret'), 6))));
 
         // too short salt are not allowed
         $config['passwordLdapSaltLength'] = 2;
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->assertEquals(28, strlen(base64_decode(substr($ldap->testHashPassword('secret'), 6))));
     }
 
@@ -264,7 +264,7 @@ class ldapinternals_Test extends TestCase
     {
         $config = $this->config;
         $config['passwordLdapHashAlgo'] = 'CRYPT';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $hash = $ldap->testHashPassword('secret');
         $this->assertStringStartsWith('{CRYPT}$6$rounds=50000$', $hash);
         $hash = substr($hash, 7);
@@ -278,12 +278,12 @@ class ldapinternals_Test extends TestCase
             $config = $this->config;
             $config['passwordLdapHashAlgo'] = $algo;
             $logger = new ArrayLogger();
-            $ldap = new LdapForTests($config, $logger);
+            $ldap = new LdapClientForTests($config, $logger);
             $this->assertStringStartsWith('{'.$algo.'}', $ldap->testHashPassword('secret'));
             $this->assertCount(1, $logger->messages);
             $this->assertEquals('warning', $logger->messages[0][0]);
         }
-        $this->assertEquals('{SHA}'.base64_encode(sha1('secret', true)), (new LdapForTests(
+        $this->assertEquals('{SHA}'.base64_encode(sha1('secret', true)), (new LdapClientForTests(
             array_merge($this->config, array('passwordLdapHashAlgo' => 'SHA'))))->testHashPassword('secret'));
     }
 
@@ -291,7 +291,7 @@ class ldapinternals_Test extends TestCase
     {
         $config = $this->config;
         $config['passwordLdapHashAlgo'] = 'EXOP';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->expectException(\Jelix\Ldap\Exception::class);
         $ldap->testHashPassword('secret');
     }
@@ -304,12 +304,12 @@ class ldapinternals_Test extends TestCase
         $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
 
         // group parameters without featureGroupLoad: groups are not loaded
-        $ldap = new LdapForTests($config);
-        $this->assertEquals(0, $ldap->getFeatures() & Ldap::FEATURE_GROUP_LOAD);
+        $ldap = new LdapClientForTests($config);
+        $this->assertEquals(0, $ldap->getFeatures() & LdapClient::FEATURE_GROUP_LOAD);
 
         $config['featureGroupLoad'] = true;
-        $ldap = new LdapForTests($config);
-        $this->assertEquals(Ldap::FEATURE_GROUP_LOAD, $ldap->getFeatures() & Ldap::FEATURE_GROUP_LOAD);
+        $ldap = new LdapClientForTests($config);
+        $this->assertEquals(LdapClient::FEATURE_GROUP_LOAD, $ldap->getFeatures() & LdapClient::FEATURE_GROUP_LOAD);
     }
 
     function testFeatureGroupLoadNeedsGroupParameters()
@@ -322,7 +322,7 @@ class ldapinternals_Test extends TestCase
             $config['searchGroupBaseDN'] = 'ou=groups,dc=tests,dc=jelix';
             $config[$name] = ' ';
             try {
-                new Ldap($config);
+                new LdapClient($config);
                 $this->fail('an exception should be thrown when '.$name.' is empty');
             } catch (\Jelix\Ldap\Exception $e) {
                 $this->assertStringContainsString($name, $e->getMessage());
@@ -335,7 +335,7 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['tlsMode'] = 'starttls';
         $config['passwordLdapHashAlgo'] = 'AD';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $this->expectException(\Jelix\Ldap\Exception::class);
         $ldap->testHashPassword('secret');
     }
@@ -346,7 +346,7 @@ class ldapinternals_Test extends TestCase
             $config = $this->config;
             $config['tlsMode'] = $tlsMode;
             $config['passwordLdapHashAlgo'] = 'AD';
-            $ldap = new LdapForTests($config);
+            $ldap = new LdapClientForTests($config);
             $this->assertEquals($tlsMode, $ldap->getParameter('tlsMode'));
         }
 
@@ -354,7 +354,7 @@ class ldapinternals_Test extends TestCase
         $config['tlsMode'] = '';
         $config['passwordLdapHashAlgo'] = 'ad';
         $this->expectException(\Jelix\Ldap\Exception::class);
-        new Ldap($config);
+        new LdapClient($config);
     }
 
     function testADDefaultNewUserLdapAttributes()
@@ -362,7 +362,7 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['tlsMode'] = 'starttls';
         $config['passwordLdapHashAlgo'] = 'AD';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $attributes = $ldap->getParameter('newUserLdapAttributes');
         $this->assertEquals('user', $attributes['objectClass']);
         $this->assertEquals('%%LOGIN%%', $attributes['sAMAccountName']);
@@ -375,7 +375,7 @@ class ldapinternals_Test extends TestCase
         $config = $this->config;
         $config['tlsMode'] = 'starttls';
         $config['passwordLdapHashAlgo'] = 'AD';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
 
         $this->assertEquals("\"\0p\0a\0s\0s\0\"\0", $ldap->testEncodeActiveDirectoryPassword('pass'));
         $this->assertEquals("\"\0\xE9\0\xAC\x20\"\0", $ldap->testEncodeActiveDirectoryPassword('é€'));
@@ -387,7 +387,7 @@ class ldapinternals_Test extends TestCase
     function testLogEscapesControlCharacters()
     {
         $logger = new ArrayLogger();
-        $ldap = new LdapForTests($this->config, $logger);
+        $ldap = new LdapClientForTests($this->config, $logger);
         $ldap->testLog(5, "ldap user \"john\nLDAP error: fake\" not found");
         $this->assertEquals(array(array('error', 'ldap user "john\nLDAP error: fake" not found')), $logger->messages);
         $this->assertStringNotContainsString("\n", $logger->messages[0][1]);
@@ -397,7 +397,7 @@ class ldapinternals_Test extends TestCase
     {
         $config = $this->config;
         $config['searchAttributes'] = 'uid:login,displayName:realname,mail:email,userPassword:,objectClass:';
-        $ldap = new LdapForTests($config);
+        $ldap = new LdapClientForTests($config);
         $ldap->testcheckUpdatableAttributes(array('mail' => 'a@b.c', 'DISPLAYNAME' => 'foo'));
 
         foreach (array('userPassword', 'USERPASSWORD', 'objectClass', 'unicodePwd', 'description') as $attr) {
