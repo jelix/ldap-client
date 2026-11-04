@@ -331,6 +331,23 @@ class LdapClient
         return $feat;
     }
 
+    public function hasFeature(int $feature) : bool
+    {
+        switch($feature) {
+            case self::FEATURE_CHANGE_PASSWORD:
+                return $this->parameters['featureChangePassword'];
+            case self::FEATURE_CREATE_USER:
+                return $this->parameters['featureCreateUser'];
+            case self::FEATURE_DELETE_USER:
+                return $this->parameters['featureDeleteUser'];
+            case self::FEATURE_UPDATE_USER:
+                return $this->parameters['featureUpdateUser'];
+            case self::FEATURE_GROUP_LOAD:
+                return $this->parameters['featureGroupLoad'];
+        }
+        return false;
+    }
+
     /**
      * Try to connect to the ldap server and bind with the admin credentials.
      * Can be used to implement a "test connection" button of an UI for example.
