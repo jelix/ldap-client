@@ -151,7 +151,7 @@ class LdapClient
     public function __construct(array $params, ?LoggerInterface $logger = null)
     {
         if (!extension_loaded('ldap')) {
-            throw new Exception('PHP Ldap extension is not activated');
+            throw new Exception('PHP Ldap extension is not activated', 1);
         }
 
         $this->logger = $logger;
@@ -171,12 +171,12 @@ class LdapClient
             $tlsMode = '';
         }
         if (!in_array($tlsMode, self::$tlsModes, true)) {
-            throw new Exception('ldap configuration: invalid tlsMode value "'.$this->parameters['tlsMode'].'". Possible values: "" (or "none"), "starttls", "ldaps"');
+            throw new Exception('ldap configuration: invalid tlsMode value "'.$this->parameters['tlsMode'].'". Possible values: "" (or "none"), "starttls", "ldaps"', 2);
         }
         $this->parameters['tlsMode'] = $tlsMode;
 
         if (!isset($this->parameters['searchUserBaseDN']) || $this->parameters['searchUserBaseDN'] == '') {
-            throw new Exception('ldap configuration: base DN for search is missing');
+            throw new Exception('ldap configuration: base DN for search is missing', 3);
         }
 
         if (!is_array($this->parameters['searchUserBaseDN'])) {
@@ -184,7 +184,7 @@ class LdapClient
         }
 
         if (!isset($this->parameters['searchUserFilter']) || $this->parameters['searchUserFilter'] == '') {
-            throw new Exception('ldap configuration: search filter missing');
+            throw new Exception('ldap configuration: search filter missing', 4);
         }
         if (!is_array($this->parameters['searchUserFilter'])) {
             $this->parameters['searchUserFilter'] = array($this->parameters['searchUserFilter']);
@@ -194,7 +194,7 @@ class LdapClient
         $cb = count($this->parameters['searchUserBaseDN']);
         if ($cf != $cb) {
             if ($cf > 1 && $cb > 1) {
-                throw new Exception('ldap configuration: wrong number of searchUserFilter and searchUserBaseDN values');
+                throw new Exception('ldap configuration: wrong number of searchUserFilter and searchUserBaseDN values', 5);
             }
             if ($cf === 1) {
                 $this->parameters['searchUserFilter'] = array_fill(0, $cb, $this->parameters['searchUserFilter'][0]);
@@ -253,17 +253,17 @@ class LdapClient
                 }
             }
         } else if (!is_array($newUserAttrs)) {
-            throw new Exception('ldap configuration: newUserLdapAttributes should be a string or an array');
+            throw new Exception('ldap configuration: newUserLdapAttributes should be a string or an array', 6);
         }
 
         if ($this->parameters['newUserDN'] == '' && $this->parameters['featureCreateUser']) {
-            throw new Exception('ldap configuration: no newUserDN config parameter');
+            throw new Exception('ldap configuration: no newUserDN config parameter', 7);
         }
 
         if ($this->parameters['featureGroupLoad']) {
             foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
                 if (trim((string) $this->parameters[$name]) === '') {
-                    throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled');
+                    throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled', 8);
                 }
             }
         }
@@ -301,7 +301,7 @@ class LdapClient
         }
 
         if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '') {
-            throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"');
+            throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"', 9);
         }
     }
 
@@ -432,7 +432,7 @@ class LdapClient
             if (!@ldap_mod_replace($connectAdmin, $dn, $attributes)) {
                 $msg = 'ldap: error when trying to update attributes for "'.$login.'"';
                 $this->log(self::LOG_ERROR, $msg, $connectAdmin);
-                throw new Exception($msg);
+                throw new Exception($msg, 40);
             }
             return true;
         } finally {
@@ -461,7 +461,7 @@ class LdapClient
         if (!$this->isValidLogin($login)) {
             $msg = 'ldap: invalid login "'.$login.'" for the new user';
             $this->log(self::LOG_ERROR, $msg);
-            throw new Exception($msg);
+            throw new Exception($msg, 20);
         }
 
         $realName = $name ?: $login;
@@ -508,7 +508,7 @@ class LdapClient
         if ($dn === false) {
             $msg = 'ldap: failed to create DN for user "'.$login.'"';
             $this->log(self::LOG_ERROR, $msg);
-            throw new Exception($msg);
+            throw new Exception($msg, 41);
         }
 
         $connectAdmin = $this->_bindLdapAdminUser();
@@ -516,7 +516,7 @@ class LdapClient
             if (!@ldap_add($connectAdmin, $dn, $ldapAttributes)) {
                 $msg = 'ldap: error when trying to create a user "'.$login.'"';
                 $this->log(self::LOG_ERROR, $msg, $connectAdmin);
-                throw new Exception($msg);
+                throw new Exception($msg, 42);
             }
 
             if ($useExop && @ldap_exop_passwd($connectAdmin, $dn, '', $password) === false) {
@@ -524,7 +524,7 @@ class LdapClient
                 $this->log(self::LOG_ERROR, $msg, $connectAdmin);
                 // we don't want an account without password
                 @ldap_delete($connectAdmin, $dn);
-                throw new Exception($msg);
+                throw new Exception($msg, 43);
             }
 
             if ($useAD) {
@@ -566,7 +566,7 @@ class LdapClient
             if (!@ldap_delete($connectAdmin, $attributes->dn)) {
                 $msg = 'ldap: error when trying to delete a user "'.$login.'"';
                 $this->log(self::LOG_ERROR, $msg, $connectAdmin);
-                throw new Exception($msg);
+                throw new Exception($msg, 44);
             }
             return $attributes;
         } finally {
@@ -616,7 +616,7 @@ class LdapClient
             if ($result === false) {
                 $msg = 'ldap: error when trying to change password of user "'.$login.'"';
                 $this->log(self::LOG_ERROR, $msg, $connectAdmin);
-                throw new Exception($msg);
+                throw new Exception($msg, 45);
             }
             return true;
         } finally {
@@ -758,14 +758,14 @@ class LdapClient
                 }
                 $msg = 'ldap: error during the search of the user "'.$login.'" with the base DN "'.$baseDn.'"';
                 $this->log(self::LOG_ERROR, $msg.' and filter "'.$filter.'"', $connect);
-                throw new Exception($msg);
+                throw new Exception($msg, 46);
             }
 
             $count = ldap_count_entries($connect, $search);
             if ($count > 1) {
                 $msg = 'ldap: several entries match the login "'.$login.'" with the base DN "'.$baseDn.'"';
                 $this->log(self::LOG_ERROR, $msg.' and filter "'.$filter.'"');
-                throw new Exception($msg);
+                throw new Exception($msg, 47);
             }
             if ($count == 1) {
                 return ldap_first_entry($connect, $search);
@@ -809,7 +809,7 @@ class LdapClient
         if ($dn === false || $dn === '') {
             $msg = 'ldap: cannot retrieve the DN of the user "'.$login.'"';
             $this->log(self::LOG_ERROR, $msg, $connect);
-            throw new Exception($msg);
+            throw new Exception($msg, 48);
         }
         return $dn;
     }
@@ -830,7 +830,7 @@ class LdapClient
             ) {
                 $msg = 'ldap: the attribute "'.$name.'" cannot be modified';
                 $this->log(self::LOG_ERROR, $msg);
-                throw new Exception($msg);
+                throw new Exception($msg, 21);
             }
         }
     }
@@ -998,7 +998,7 @@ class LdapClient
         if ($search === false) {
             $msg = 'ldap error during group search for "'.$login.'", with the searchGroupFilter query "'.$filter.'"';
             $this->log(self::LOG_ERROR, $msg, $connect);
-            throw new Exception('ldap error during group search for "'.$login.'"');
+            throw new Exception('ldap error during group search for "'.$login.'"', 49);
         }
 
         $entry = @ldap_first_entry($connect, $search);
@@ -1033,7 +1033,7 @@ class LdapClient
         $connect = @ldap_connect($this->uriConnect);
         if (!$connect) {
             $this->log(self::LOG_ERROR, 'ldap connection: impossible to connect to ldap with the given uri "'.$this->uriConnect.'"');
-            throw new Exception('ldap connection: impossible to connect to ldap');
+            throw new Exception('ldap connection: impossible to connect to ldap', 70);
         }
 
         ldap_set_option($connect, LDAP_OPT_PROTOCOL_VERSION, $this->parameters['protocolVersion']);
@@ -1055,7 +1055,7 @@ class LdapClient
             if (!@ldap_start_tls($connect)) {
                 $this->log(self::LOG_ERROR, 'ldap connection: impossible to start TLS connection to ' . $this->uriConnect, $connect);
                 ldap_close($connect);
-                throw new Exception('ldap connection: impossible to start TLS connection');
+                throw new Exception('ldap connection: impossible to start TLS connection', 71);
             }
         }
 
@@ -1104,7 +1104,7 @@ class LdapClient
         if ($this->parameters['adminUserDn'] != '' && (string)$this->parameters['adminPassword'] === '') {
             // a bind with a DN and without password is an unauthenticated bind
             $this->log(self::LOG_ERROR, 'ldap configuration: password of the admin user is missing');
-            throw new Exception('ldap configuration: password of the admin user is missing');
+            throw new Exception('ldap configuration: password of the admin user is missing', 10);
         }
 
         $connect = $this->_getLinkId();
@@ -1120,7 +1120,7 @@ class LdapClient
                 $this->log(self::LOG_ERROR, 'ldap connection: impossible to authenticate to ldap with admin user '.$this->parameters['adminUserDn'], $connect);
             }
             ldap_close($connect);
-            throw new Exception('ldap connection: impossible to authenticate to ldap with the main user');
+            throw new Exception('ldap connection: impossible to authenticate to ldap with the main user', 72);
         }
         return $connect;
     }
@@ -1154,7 +1154,7 @@ class LdapClient
     protected function encodeActiveDirectoryPassword(string $password): string
     {
         if (!preg_match('//u', $password)) {
-            throw new Exception('ldap: the password is not a valid UTF-8 string');
+            throw new Exception('ldap: the password is not a valid UTF-8 string', 22);
         }
         return iconv('UTF-8', 'UTF-16LE', '"'.$password.'"');
     }
@@ -1180,7 +1180,7 @@ class LdapClient
             $this->log(self::LOG_ERROR, $msg, $connectAdmin);
             // we don't want an account without password
             @ldap_delete($connectAdmin, $dn);
-            throw new Exception($msg);
+            throw new Exception($msg, 50);
         }
 
         // enable the account, keeping other flags given into newUserLdapAttributes
@@ -1197,7 +1197,7 @@ class LdapClient
             $msg = 'ldap: error when trying to enable the account of the new user "'.$login.'"';
             $this->log(self::LOG_ERROR, $msg, $connectAdmin);
             @ldap_delete($connectAdmin, $dn);
-            throw new Exception($msg);
+            throw new Exception($msg, 51);
         }
     }
 
@@ -1217,7 +1217,7 @@ class LdapClient
                 $salt = substr(strtr(base64_encode(random_bytes(12)), '+', '.'), 0, 16);
                 $hash = crypt($password, '$6$rounds=50000$'.$salt.'$');
                 if (strpos($hash, '$6$') !== 0) {
-                    throw new Exception("ldap hash password: SHA-512 crypt is not supported");
+                    throw new Exception("ldap hash password: SHA-512 crypt is not supported", 11);
                 }
                 return '{CRYPT}'.$hash;
             case 'SSHA':
@@ -1238,7 +1238,7 @@ class LdapClient
                 return $password;
             default:
                 // EXOP and AD are not supported here: the password is never hashed by the library
-                throw new Exception("ldap hash password: Unknown algorithm '".$this->parameters['passwordLdapHashAlgo']."'");
+                throw new Exception("ldap hash password: Unknown algorithm '".$this->parameters['passwordLdapHashAlgo']."'", 12);
         }
     }
 
