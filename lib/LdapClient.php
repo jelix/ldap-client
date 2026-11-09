@@ -106,7 +106,7 @@ class LdapClient
 
     protected static $tlsModes = array('', 'starttls', 'ldaps');
 
-    protected static $defaultParameters = array(
+    public const defaultParameters = array(
         'hostname'      =>  'localhost',
         'tlsMode'       => '', // TLS mode: '' (or 'none'), 'starttls', 'ldaps'
         'port'          =>  389, // Port number
@@ -160,7 +160,7 @@ class LdapClient
         $this->parameters = $params;
 
         // iterate each default parameter and apply it to actual params if missing in $params.
-        foreach (self::$defaultParameters as $name => $value) {
+        foreach (self::defaultParameters as $name => $value) {
             if (!isset($this->parameters[$name]) || $this->parameters[$name] === '') {
                 $this->parameters[$name] = $value;
             }
