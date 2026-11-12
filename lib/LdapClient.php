@@ -145,6 +145,16 @@ class LdapClient
      */
     protected $parameters = array();
 
+    public const ERROR_ANONYMOUS_AUTH = 1;
+    public const ERROR_USER_NOT_FOUND = 2;
+    public const ERROR_MISSING_BIND_ATTRIBUTE = 3;
+    public const ERROR_WRONG_DN_OR_PASSWORD = 4;
+
+    /**
+     * @var int one of ERROR_* const value
+     */
+    protected $latestErrorCode = 0;
+
     /**
      * @param array $params configuration parameters
      */
@@ -661,15 +671,18 @@ class LdapClient
      * @param string $login
      * @param string $password
      * @return false|UserLdapAttributes
+     * @see getLatestErrorCode() to get the error code to know why the authentication fails
      * @throws Exception
      */
-    public function verifyAuthentication(string $login, string $password): false|UserLdapAttributes
+    public function verifyAuthentication(string $login, string $password, bool $loadAlsoGroups = true): false|UserLdapAttributes
     {
+        $this->latestErrorCode = 0;
         $login = trim($login, " ");
         if (trim($password) == '' || trim($login) == '') {
             // we don't want Unauthenticated Authentication
             // and Anonymous Authentication
             // https://tools.ietf.org/html/rfc4513#section-5.1
+            $this->latestErrorCode = self::ERROR_ANONYMOUS_AUTH;
             return false;
         }
 
@@ -679,6 +692,7 @@ class LdapClient
             $attributes = $this->searchLdapUserAttributes($connectAdmin, $login);
             if ($attributes === false) {
                 $this->log(self::LOG_DEBUG, 'ldap authentication: user '.$login.' not found into the ldap');
+                $this->latestErrorCode = self::ERROR_USER_NOT_FOUND;
                 return false;
             }
 
@@ -693,6 +707,7 @@ class LdapClient
                 // an empty DN would lead to an unauthenticated bind, that
                 // some servers accept whatever the password.
                 $this->log(self::LOG_ERROR, 'ldap authentication: no DN to bind for the login "'.$login.'". Attribute "'.$this->parameters['bindAttribute'].'" is missing or empty');
+                $this->latestErrorCode = self::ERROR_MISSING_BIND_ATTRIBUTE;
                 return false;
             }
 
@@ -706,6 +721,7 @@ class LdapClient
 
             try {
                 if (!@ldap_bind($connect, $bindDn, $password)) {
+                    $this->latestErrorCode = self::ERROR_WRONG_DN_OR_PASSWORD;
                     $this->log(self::LOG_DEBUG, 'ldap authentication: cannot authenticate to ldap with given base DN for the login ' . $login. '. Wrong DN or password');
                     $this->log(self::LOG_NOTICE, 'ldap authentication: failed to connect with "'.$bindDn.'"', $connect);
                     return false;
@@ -714,13 +730,25 @@ class LdapClient
                 ldap_close($connect);
             }
 
-            // retrieve the user groups (if featureGroupLoad is enabled)
-            $this->searchUserGroups($connectAdmin, $attributes, $login);
+            if ($loadAlsoGroups) {
+                // retrieve the user groups (if featureGroupLoad is enabled)
+                $this->searchUserGroups($connectAdmin, $attributes, $login);
+            }
             return $attributes;
         } finally {
             ldap_close($connectAdmin);
         }
         return false;
+    }
+
+    /**
+     * get the error code of the reason why verifyAuthentication() has failed
+     *
+     * @return int one of ERROR_* const value
+     */
+    public function getLatestErrorCode(): int
+    {
+        return $this->latestErrorCode;
     }
 
     /**
@@ -1147,7 +1175,7 @@ class LdapClient
                 $this->log(self::LOG_ERROR, 'ldap connection: impossible to authenticate to ldap with admin user '.$this->parameters['adminUserDn'], $connect);
             }
             ldap_close($connect);
-            throw new Exception('ldap connection: impossible to authenticate to ldap with the main user', 72);
+            throw new Exception('ldap connection: impossible to authenticate to ldap with the admin user', 72);
         }
         return $connect;
     }
