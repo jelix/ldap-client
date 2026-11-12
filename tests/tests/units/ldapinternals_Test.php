@@ -86,6 +86,20 @@ class ldapinternals_Test extends TestCase
         'searchAttributes' => 'uid:login,displayName:realname,mail:email',
     );
 
+    function testSearchAttributesParser()
+    {
+        $attributes = 'UID:login,displayname:realname,mail:email,cn:,foo,givenName:firstname';
+        $result = LdapClient::parseSearchAttributes($attributes);
+        $this->assertEquals(array(
+            'UID' => 'login',
+            'displayname' => 'realname',
+            'mail' => 'email',
+            'cn' => '',
+            'foo' => 'foo',
+            'givenName' => 'firstname'
+        ), $result);
+    }
+
     function testTlsModeValues()
     {
         foreach (array(

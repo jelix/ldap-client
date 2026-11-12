@@ -224,29 +224,7 @@ class LdapClient
             }
         }
 
-        if (!isset($this->parameters['searchAttributes']) || $this->parameters['searchAttributes'] == '') {
-            $this->parameters['searchAttributes'] = self::$defaultAttributes;
-        } else if (is_string($this->parameters['searchAttributes'])) {
-            $attrs = explode(",", $this->parameters['searchAttributes']);
-            $this->parameters['searchAttributes'] = array();
-            foreach ($attrs as $attr) {
-                if (strpos($attr, ':') === false) {
-                    $attr = trim($attr);
-                    if ($attr !== '') {
-                        $this->parameters['searchAttributes'][$attr] = $attr;
-                    }
-                } else {
-                    $attr = explode(':', $attr, 2);
-                    $this->parameters['searchAttributes'][trim($attr[0])] = trim($attr[1]);
-                }
-            }
-        } else if (is_array($this->parameters['searchAttributes'])) {
-            foreach($this->parameters['searchAttributes'] as $ldapAttr => $userField) {
-                if ($userField == '=') {
-                    $this->parameters['searchAttributes'][$ldapAttr] = $ldapAttr;
-                }
-            }
-        }
+        $this->parameters['searchAttributes'] = self::parseSearchAttributes($this->parameters['searchAttributes'] ?? '');
 
         $newUserAttrs = $this->parameters['newUserLdapAttributes'] ?? '';
         if ($newUserAttrs === '' || $newUserAttrs === array() || $newUserAttrs === null) {
@@ -323,6 +301,43 @@ class LdapClient
         if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '' && !$testMode) {
             throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"', 9);
         }
+    }
+
+    /**
+     * Parse the `searchAttributes` configuration parameters
+     *
+     * @param string|array $searchAttributes
+     * @return array list of ldap attributes as keys, and user fields as values
+     */
+    public static function parseSearchAttributes(string|array $searchAttributes): array
+    {
+        if ($searchAttributes == '') {
+            return self::$defaultAttributes;
+        }
+
+        if (is_string($searchAttributes)) {
+            $attrs = explode(",", $searchAttributes);
+            $searchAttributes = array();
+            foreach ($attrs as $attr) {
+                if (strpos($attr, ':') === false) {
+                    $attr = trim($attr);
+                    if ($attr !== '') {
+                        $searchAttributes[$attr] = $attr;
+                    }
+                } else {
+                    $attr = explode(':', $attr, 2);
+                    $searchAttributes[trim($attr[0])] = trim($attr[1]);
+                }
+            }
+        } else if (is_array($searchAttributes)) {
+            foreach($searchAttributes as $ldapAttr => $userField) {
+                if ($userField == '=') {
+                    $searchAttributes[$ldapAttr] = $ldapAttr;
+                }
+            }
+        }
+
+        return $searchAttributes;
     }
 
     /**

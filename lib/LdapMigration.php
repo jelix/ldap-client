@@ -82,7 +82,7 @@ class LdapMigration
 
         // case `%%LOGIN%%`: the login is the DN, so we take the attribute mapped to the login
         if (in_array('%%LOGIN%%', $templates, true)) {
-            $attributes = self::parseSearchAttributes($searchAttributes);
+            $attributes = LdapClient::parseSearchAttributes($searchAttributes);
             foreach ($attributes as $ldapAttr => $userField) {
                 if (trim((string) $userField) == 'login') {
                     return $ldapAttr;
