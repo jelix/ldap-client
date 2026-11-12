@@ -148,7 +148,7 @@ class LdapClient
     /**
      * @param array $params configuration parameters
      */
-    public function __construct(array $params, ?LoggerInterface $logger = null)
+    public function __construct(array $params, ?LoggerInterface $logger = null, $testMode = false)
     {
         if (!extension_loaded('ldap')) {
             throw new Exception('PHP Ldap extension is not activated', 1);
@@ -176,7 +176,12 @@ class LdapClient
         $this->parameters['tlsMode'] = $tlsMode;
 
         if (!isset($this->parameters['searchUserBaseDN']) || $this->parameters['searchUserBaseDN'] == '') {
-            throw new Exception('ldap configuration: base DN for search is missing', 3);
+            if ($testMode) {
+                $this->parameters['searchUserBaseDN'] = array();
+            }
+            else {
+                throw new Exception('ldap configuration: base DN for search is missing', 3);
+            }
         }
 
         if (!is_array($this->parameters['searchUserBaseDN'])) {
@@ -184,7 +189,12 @@ class LdapClient
         }
 
         if (!isset($this->parameters['searchUserFilter']) || $this->parameters['searchUserFilter'] == '') {
-            throw new Exception('ldap configuration: search filter missing', 4);
+            if ($testMode) {
+                $this->parameters['searchUserFilter'] = array();
+            }
+            else {
+                throw new Exception('ldap configuration: search filter missing', 4);
+            }
         }
         if (!is_array($this->parameters['searchUserFilter'])) {
             $this->parameters['searchUserFilter'] = array($this->parameters['searchUserFilter']);
@@ -260,7 +270,7 @@ class LdapClient
             throw new Exception('ldap configuration: no newUserDN config parameter', 7);
         }
 
-        if ($this->parameters['featureGroupLoad']) {
+        if ($this->parameters['featureGroupLoad'] && !$testMode) {
             foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
                 if (trim((string) $this->parameters[$name]) === '') {
                     throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled', 8);
@@ -300,7 +310,7 @@ class LdapClient
             }
         }
 
-        if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '') {
+        if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '' && !$testMode) {
             throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"', 9);
         }
     }
