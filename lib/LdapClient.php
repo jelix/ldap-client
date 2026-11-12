@@ -372,16 +372,20 @@ class LdapClient
      * Try to connect to the ldap server and bind with the admin credentials.
      * Can be used to implement a "test connection" button of an UI for example.
      *
-     * @return bool|string true if it is ok, else the error message
+     * @return array
      */
     public function testConnection()
     {
         try {
             $connectAdmin = $this->_bindLdapAdminUser();
             ldap_close($connectAdmin);
-            return true;
+            return array('result' => true);
         } catch(Exception $e) {
-            return $e->getMessage();
+            return array(
+                'result' => false,
+                'errorCode' => $e->getCode(),
+                'errorMessage' => $e->getMessage()
+            );
         }
     }
 
