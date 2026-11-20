@@ -83,6 +83,7 @@ class LdapClient
         'searchGroupBaseDN' => '',
         'featureGroupLoad' => false,
         'clientTLSCACertificateFile'=> '',
+        'featureClientTLSCertificate' => false, // true to use the client certificate
         'clientTLSCertificateFile'=> '',
         'clientTLSKeyFile'=> '',
     );
@@ -183,6 +184,14 @@ class LdapClient
                 if (trim((string) $this->parameters[$name]) === '') {
                     throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled', 8);
                 }
+            }
+        }
+
+        if ($this->parameters['featureClientTLSCertificate'] && !$testMode) {
+            if (trim((string) $this->parameters['clientTLSCertificateFile']) === ''
+                || trim((string) $this->parameters['clientTLSKeyFile']) === ''
+            ) {
+                throw new Exception('ldap configuration: clientTLSCertificateFile and clientTLSKeyFile config parameters are required when featureClientTLSCertificate is enabled', 13);
             }
         }
 
@@ -730,11 +739,13 @@ class LdapClient
         if ($this->parameters['clientTLSCACertificateFile']) {
             ldap_set_option(null, LDAP_OPT_X_TLS_CACERTFILE, $this->parameters['clientTLSCACertificateFile']);
         }
-        if ($this->parameters['clientTLSCertificateFile']) {
-            ldap_set_option(null, LDAP_OPT_X_TLS_CERTFILE, $this->parameters['clientTLSCertificateFile']);
-        }
-        if ($this->parameters['clientTLSKeyFile']) {
-            ldap_set_option(null, LDAP_OPT_X_TLS_KEYFILE, $this->parameters['clientTLSKeyFile']);
+        if ($this->parameters['featureClientTLSCertificate']) {
+            if ($this->parameters['clientTLSCertificateFile']) {
+                ldap_set_option(null, LDAP_OPT_X_TLS_CERTFILE, $this->parameters['clientTLSCertificateFile']);
+            }
+            if ($this->parameters['clientTLSKeyFile']) {
+                ldap_set_option(null, LDAP_OPT_X_TLS_KEYFILE, $this->parameters['clientTLSKeyFile']);
+            }
         }
 
         // the certificate of the server must always be verified, whatever

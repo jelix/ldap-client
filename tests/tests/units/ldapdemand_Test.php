@@ -42,6 +42,7 @@ class ldapdemand_Test  extends TestCase {
         'featureDeleteUser' => true,
         'featureChangePassword' => true,
         'clientTLSCACertificateFile' => '/customcerts/tests.jelix-CA.crt',
+        'featureClientTLSCertificate' => true,
         'clientTLSCertificateFile' => '/customcerts/client.jelix.crt',
         'clientTLSKeyFile' => '/customcerts/client.jelix.key',
     );
@@ -50,6 +51,7 @@ class ldapdemand_Test  extends TestCase {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'starttls';
         $config['clientTLSCACertificateFile'] = '';
+        $config['featureClientTLSCertificate'] = false;
         $config['clientTLSCertificateFile'] = '';
         $config['clientTLSKeyFile'] = '';
         $this->expectException(\Jelix\Ldap\Exception::class);
@@ -83,6 +85,7 @@ class ldapdemand_Test  extends TestCase {
         $config['tlsMode'] = 'ldaps';
         $config['port'] = 636;
         $config['clientTLSCACertificateFile'] = '';
+        $config['featureClientTLSCertificate'] = false;
         $config['clientTLSCertificateFile'] = '';
         $config['clientTLSKeyFile'] = '';
         $this->expectException(\Jelix\Ldap\Exception::class);
@@ -91,6 +94,17 @@ class ldapdemand_Test  extends TestCase {
 
         $this->assertTrue($ldap->userExists('john'));
         $this->assertFalse($ldap->userExists('johnny'));
+    }
+
+    function testClientCertIsIgnoredWithoutFeatureClientTLSCertificate() {
+        // certificate files are given, but their use is not enabled:
+        // the server refuses the connection
+        $config = $this->ldapProfile;
+        $config['tlsMode'] = 'starttls';
+        $config['featureClientTLSCertificate'] = false;
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        $ldap = new LdapClient($config, new TestLogger());
+        $ldap->userExists('john');
     }
 
     function testGetUserOfPeople()

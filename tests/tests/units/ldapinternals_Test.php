@@ -364,6 +364,35 @@ class ldapinternals_Test extends TestCase
         new LdapUserManager($config);
     }
 
+    function testFeatureClientTLSCertificateNeedsCertificateFiles()
+    {
+        $config = $this->config;
+        $config['featureClientTLSCertificate'] = true;
+        $config['clientTLSCertificateFile'] = '/customcerts/client.jelix.crt';
+        $config['clientTLSKeyFile'] = '/customcerts/client.jelix.key';
+        // no error when both files are given
+        $this->assertInstanceOf(LdapClient::class, new LdapClient($config));
+
+        foreach (array('clientTLSCertificateFile', 'clientTLSKeyFile') as $name) {
+            $conf = $config;
+            $conf[$name] = '';
+            // no check in test mode
+            new LdapClient($conf, null, true);
+            try {
+                new LdapClient($conf);
+                $this->fail('an exception should be thrown when '.$name.' is empty');
+            } catch (\Jelix\Ldap\Exception $e) {
+                $this->assertEquals(13, $e->getCode());
+            }
+        }
+
+        // no check when the feature is disabled
+        $config['featureClientTLSCertificate'] = false;
+        $config['clientTLSCertificateFile'] = '';
+        $config['clientTLSKeyFile'] = '';
+        $this->assertInstanceOf(LdapClient::class, new LdapClient($config));
+    }
+
     function testFeatureGroupLoadNeedsGroupParameters()
     {
         foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {

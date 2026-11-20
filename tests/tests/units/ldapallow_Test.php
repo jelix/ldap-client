@@ -65,6 +65,7 @@ class ldapallow_Test  extends TestCase {
     function testUserExistsStartTlsWithClientCert() {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'starttls';
+        $config['featureClientTLSCertificate'] = true;
         $config['clientTLSCertificateFile'] = '/customcerts/client.jelix.crt';
         $config['clientTLSKeyFile'] = '/customcerts/client.jelix.key';
         $ldap = new LdapClient($config, new TestLogger());
@@ -88,6 +89,7 @@ class ldapallow_Test  extends TestCase {
         $config = $this->ldapProfile;
         $config['tlsMode'] = 'ldaps';
         $config['port'] = 636;
+        $config['featureClientTLSCertificate'] = true;
         $config['clientTLSCertificateFile'] = '/customcerts/client.jelix.crt';
         $config['clientTLSKeyFile'] = '/customcerts/client.jelix.key';
 

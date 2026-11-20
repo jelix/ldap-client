@@ -74,9 +74,21 @@ Using client certificates and custom CA certificates
 If the server is using a custom or self-signed CA certificate, indicate the path to this certificate
 into the configuration parameter `clientTLSCACertificateFile`.
 
-If the server requires a client certificate, indicate the path to the client certificate
+If the server requires a client certificate, set the configuration parameter
+`featureClientTLSCertificate` to `true` (it is `false` by default), and indicate the path to the client certificate
 into the configuration parameter `clientTLSCertificateFile` and the path to the client key
-into the configuration parameter `clientTLSKeyFile`.
+into the configuration parameter `clientTLSKeyFile`. These two parameters are then required.
+When `featureClientTLSCertificate` is `false`, they are ignored.
+
+```php
+$config = array(
+    // ...
+    'tlsMode' => 'starttls',
+    'featureClientTLSCertificate' => true,
+    'clientTLSCertificateFile' => '/etc/ssl/certs/ldap-client.crt',
+    'clientTLSKeyFile' => '/etc/ssl/private/ldap-client.key',
+);
+```
 
 **Warning**: don't use these parameters on a PHP server which serves different PHP applications, because these
 openldap settings are global to the PHP process and can affect other PHP applications running on the same server. For the same reason, you cannot use several instances of the Ldap class with different client certificates, during the same http request. All connections will use the same client certificate. This is not a limitation of our Ldap library, but of PHP and OpenLdap.
