@@ -6,6 +6,7 @@
  * @licence     MIT
  */
 use Jelix\Ldap\LdapClient;
+use Jelix\Ldap\LdapUserManager;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -190,7 +191,7 @@ class ldapnever_Test  extends TestCase {
     }
 
     function testCreateUser() {
-        $ldap = new LdapClient($this->ldapProfile);
+        $ldap = new LdapUserManager($this->ldapProfile);
         $this->assertTrue($ldap->createUser('testldap', 'passrobert', 'robert@tests.jelix', 'Robert Dupont'));
         $this->assertTrue($ldap->userExists('testldap'));
         $ldapAttr = $ldap->verifyAuthentication('testldap', 'passrobert');
@@ -213,7 +214,7 @@ class ldapnever_Test  extends TestCase {
      * @depends testCreateUser
      */
     function testChangePassword() {
-        $ldap = new LdapClient($this->ldapProfile);
+        $ldap = new LdapUserManager($this->ldapProfile);
         $this->assertTrue($ldap->changePassword('testldap', 'passrobert2'));
         $this->assertTrue($ldap->userExists('testldap'));
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
@@ -240,7 +241,7 @@ class ldapnever_Test  extends TestCase {
     function testChangeHashedPassword() {
         $config = $this->ldapProfile;
         $config['passwordLdapHashAlgo'] = 'SSHA';
-        $ldap = new LdapClient($config);
+        $ldap = new LdapUserManager($config);
         $this->assertTrue($ldap->changePassword('testldap', 'passroberthashed'));
         $this->assertTrue($ldap->userExists('testldap'));
         $this->assertFalse($ldap->verifyAuthentication('testldap', 'passrobert'));
@@ -265,7 +266,7 @@ class ldapnever_Test  extends TestCase {
      * @depends testChangePassword
      */
     function testDeleteUser() {
-        $ldap = new LdapClient($this->ldapProfile);
+        $ldap = new LdapUserManager($this->ldapProfile);
         $ldapAttr = $ldap->deleteUser('testldap');
         $this->assertIsObject($ldapAttr);
         $this->assertTrue($ldap->deleteUser('testldap'));

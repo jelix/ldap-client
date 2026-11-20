@@ -6,15 +6,16 @@
  * @licence     MIT
  */
 use Jelix\Ldap\LdapClient;
+use Jelix\Ldap\LdapUserManager;
 use Jelix\Ldap\UserLdapAttributes;
 use LDAP\Connection;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 
 /**
- * Gives access to protected methods of the Ldap class
+ * Gives access to protected methods of LdapClient and LdapUserManager
  */
-class LdapClientForTests extends LdapClient
+class LdapClientForTests extends LdapUserManager
 {
     public function __call($name, $arguments)
     {
@@ -326,6 +327,43 @@ class ldapinternals_Test extends TestCase
         $this->assertEquals(LdapClient::FEATURE_GROUP_LOAD, $ldap->getFeatures() & LdapClient::FEATURE_GROUP_LOAD);
     }
 
+    function testUserManagementFeatures()
+    {
+        $config = $this->config;
+        $config['featureCreateUser'] = true;
+        $config['featureUpdateUser'] = true;
+        $config['featureDeleteUser'] = true;
+        $config['featureChangePassword'] = true;
+        $config['newUserDN'] = 'uid=%%LOGIN%%,ou=people,dc=tests,dc=jelix';
+
+        // LdapClient ignores user management features
+        $ldap = new LdapClient($config);
+        $this->assertEquals(LdapClient::FEATURE_NONE, $ldap->getFeatures());
+        $this->assertFalse($ldap->hasFeature(LdapClient::FEATURE_CREATE_USER));
+        $this->assertFalse($ldap->hasFeature(LdapClient::FEATURE_CHANGE_PASSWORD));
+
+        $ldap = new LdapUserManager($config);
+        $this->assertEquals(
+            LdapClient::FEATURE_CREATE_USER | LdapClient::FEATURE_UPDATE_USER
+            | LdapClient::FEATURE_DELETE_USER | LdapClient::FEATURE_CHANGE_PASSWORD,
+            $ldap->getFeatures()
+        );
+        $this->assertTrue($ldap->hasFeature(LdapClient::FEATURE_CREATE_USER));
+        $this->assertTrue($ldap->hasFeature(LdapClient::FEATURE_CHANGE_PASSWORD));
+        $this->assertFalse($ldap->hasFeature(LdapClient::FEATURE_GROUP_LOAD));
+    }
+
+    function testNewUserDNIsRequiredByUserManager()
+    {
+        $config = $this->config;
+        $config['featureCreateUser'] = true;
+        // no error with LdapClient: the parameter is not used
+        new LdapClient($config);
+        $this->expectException(\Jelix\Ldap\Exception::class);
+        $this->expectExceptionCode(7);
+        new LdapUserManager($config);
+    }
+
     function testFeatureGroupLoadNeedsGroupParameters()
     {
         foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
@@ -368,7 +406,7 @@ class ldapinternals_Test extends TestCase
         $config['tlsMode'] = '';
         $config['passwordLdapHashAlgo'] = 'ad';
         $this->expectException(\Jelix\Ldap\Exception::class);
-        new LdapClient($config);
+        new LdapUserManager($config);
     }
 
     function testADDefaultNewUserLdapAttributes()

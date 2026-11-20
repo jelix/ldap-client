@@ -25,7 +25,7 @@ Features
   (e.g. `givenName` → `firstname`). Multi-valued attributes are supported.
 - Retrieve the groups of a user, with a configurable search filter.
 
-**Account management** (each feature must be enabled explicitly)
+**Account management** (with the `LdapUserManager` class, each feature must be enabled explicitly)
 
 - Create a user, with configurable DN and ldap attributes.
 - Update attributes of a user (only attributes declared into the configuration).
@@ -91,14 +91,22 @@ if ($user) {
 }
 
 // other methods
-// createUser, updateUser, changePassword and deleteUser need some
-// additional parameters (featureCreateUser, newUserDN...)
 $ldap->userExists('john');
 $ldap->getUser('john', true); // with groups
-$ldap->createUser('bob', 'password', 'bob@example.com', 'Bob Smith');
-$ldap->updateUser('bob', array('mail' => 'bob.smith@example.com'));
-$ldap->changePassword('bob', 'newpassword');
-$ldap->deleteUser('bob');
+```
+
+To manage user accounts, use the `LdapUserManager` class. It inherits from `LdapClient`
+(so it can also authenticate users), and needs some additional parameters
+(`featureCreateUser`, `newUserDN`, `passwordLdapHashAlgo`...).
+
+```php
+use Jelix\Ldap\LdapUserManager;
+
+$manager = new LdapUserManager($parameters, $logger);
+$manager->createUser('bob', 'password', 'bob@example.com', 'Bob Smith');
+$manager->updateUser('bob', array('mail' => 'bob.smith@example.com'));
+$manager->changePassword('bob', 'newpassword');
+$manager->deleteUser('bob');
 ```
 
 Errors (connection failure, search error, ambiguous login...) are reported

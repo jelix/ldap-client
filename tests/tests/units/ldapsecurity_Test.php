@@ -6,6 +6,7 @@
  * @licence     MIT
  */
 use Jelix\Ldap\LdapClient;
+use Jelix\Ldap\LdapUserManager;
 use Jelix\Ldap\Exception as LdapException;
 use PHPUnit\Framework\TestCase;
 
@@ -39,6 +40,11 @@ class ldapsecurity_Test extends TestCase
     protected function getLdap(array $config = array()): LdapClient
     {
         return new LdapClient(array_merge($this->ldapProfile, $config), new TestLogger());
+    }
+
+    protected function getUserManager(array $config = array()): LdapUserManager
+    {
+        return new LdapUserManager(array_merge($this->ldapProfile, $config), new TestLogger());
     }
 
     /**
@@ -77,7 +83,7 @@ class ldapsecurity_Test extends TestCase
 
     function testWriteOperationsWithInjectedLogin()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         $this->assertTrue($ldap->deleteUser('*'), 'nobody should be deleted');
         $this->assertFalse($ldap->changePassword('*', 'hacked'));
         $this->assertFalse($ldap->changePassword('jo*', 'hacked'));
@@ -91,7 +97,7 @@ class ldapsecurity_Test extends TestCase
 
     function testLoginWithSpecialCharsCanBeUsed()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         $login = 'o*brian (test)\\';
         try {
             $this->assertTrue($ldap->createUser($login, 'passbrian', 'brian@tests.jelix', 'Brian'));
@@ -118,7 +124,7 @@ class ldapsecurity_Test extends TestCase
 
     function testAmbiguousLoginIsRejectedForDeletion()
     {
-        $ldap = $this->getLdap(array(
+        $ldap = $this->getUserManager(array(
             'searchUserFilter' => "(&(objectClass=inetOrgPerson)(|(uid=%%LOGIN%%)(sn=*Doe)))",
         ));
         try {
@@ -134,7 +140,7 @@ class ldapsecurity_Test extends TestCase
 
     function testCreateUserWithDnInjection()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         $login = 'evil,ou=admins';
         try {
             $this->assertTrue($ldap->createUser($login, 'passevil', 'evil@tests.jelix', 'Evil'));
@@ -151,7 +157,7 @@ class ldapsecurity_Test extends TestCase
 
     function testCreateUserWithDnInjectionIntoAttribute()
     {
-        $ldap = $this->getLdap(array(
+        $ldap = $this->getUserManager(array(
             'newUserDN' => "uid=%?%,ou=guest,dc=tests,dc=jelix",
             'newUserLdapAttributes' => "objectClass:inetOrgPerson,uid:%%LOGIN%%,userPassword:%%PASSWORD%%,cn:%%REALNAME%%,sn:%%REALNAME%%",
         ));
@@ -259,7 +265,7 @@ class ldapsecurity_Test extends TestCase
 
     function testSearchErrorDuringDeletionThrowsAnException()
     {
-        $ldap = $this->getLdap(array('searchUserFilter' => '(uid=%%LOGIN%%'));
+        $ldap = $this->getUserManager(array('searchUserFilter' => '(uid=%%LOGIN%%'));
         $this->expectException(LdapException::class);
         $ldap->deleteUser('john');
     }
@@ -316,19 +322,19 @@ class ldapsecurity_Test extends TestCase
 
     function testCryptAndExopPasswords()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         $login = 'testsecu';
         try {
             $this->assertTrue($ldap->createUser($login, 'pass1', 'secu@tests.jelix', 'Secu'));
 
-            $ldapCrypt = $this->getLdap(array('passwordLdapHashAlgo' => 'CRYPT'));
+            $ldapCrypt = $this->getUserManager(array('passwordLdapHashAlgo' => 'CRYPT'));
             $this->assertTrue($ldapCrypt->changePassword($login, 'pass2'));
             $this->assertStringStartsWith('{CRYPT}$6$', $this->getStoredPassword($login));
             $this->assertFalse($ldapCrypt->verifyAuthentication($login, 'pass1'));
             $this->assertIsObject($ldapCrypt->verifyAuthentication($login, 'pass2'));
 
             // with EXOP, the server hashes the password
-            $ldapExop = $this->getLdap(array('passwordLdapHashAlgo' => 'EXOP'));
+            $ldapExop = $this->getUserManager(array('passwordLdapHashAlgo' => 'EXOP'));
             $this->assertTrue($ldapExop->changePassword($login, 'pass3'));
             $stored = $this->getStoredPassword($login);
             $this->assertStringStartsWith('{', $stored);
@@ -342,7 +348,7 @@ class ldapsecurity_Test extends TestCase
 
     function testCreateUserWithExop()
     {
-        $ldap = $this->getLdap(array('passwordLdapHashAlgo' => 'EXOP'));
+        $ldap = $this->getUserManager(array('passwordLdapHashAlgo' => 'EXOP'));
         $login = 'testsecuexop';
         try {
             $this->assertTrue($ldap->createUser($login, 'passexop', 'secu@tests.jelix', 'Secu'));
@@ -359,7 +365,7 @@ class ldapsecurity_Test extends TestCase
 
     function testUpdateUserWithForbiddenAttributes()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         foreach (array('userPassword', 'objectClass', 'description') as $attr) {
             try {
                 $ldap->updateUser('john', array($attr => 'foo'));
@@ -372,7 +378,7 @@ class ldapsecurity_Test extends TestCase
 
     function testUpdateUserWithAllowedAttributes()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         try {
             $this->assertTrue($ldap->updateUser('john', array('MAIL' => 'john2@jelix.org')));
             $this->assertEquals('john2@jelix.org', $ldap->getUser('john')->ldapAttributes['mail']);
@@ -387,7 +393,7 @@ class ldapsecurity_Test extends TestCase
 
     function testLoginWithSpacesOrControlCharsIsRefused()
     {
-        $ldap = $this->getLdap();
+        $ldap = $this->getUserManager();
         $this->assertTrue($ldap->userExists(' john'));
         $this->assertTrue($ldap->userExists('john '));
         $this->assertFalse($ldap->userExists("john\n"));
@@ -437,7 +443,7 @@ class ldapsecurity_Test extends TestCase
     {
         $config = $this->ldapProfile;
         unset($config['newUserLdapAttributes']);
-        $ldap = new LdapClient($config, new TestLogger());
+        $ldap = new LdapUserManager($config, new TestLogger());
         $login = 'testsecudefault';
         try {
             $this->assertTrue($ldap->createUser($login, 'passdefault', 'default@tests.jelix', 'Default User'));
@@ -449,7 +455,7 @@ class ldapsecurity_Test extends TestCase
 
     function testCreateUserWithPlaceholdersAndMultiValues()
     {
-        $ldap = $this->getLdap(array(
+        $ldap = $this->getUserManager(array(
             'searchAttributes' => "uid:login,displayName:realname,mail:email,description:,objectClass:,cn:",
             'newUserLdapAttributes' => array(
                 'objectClass' => array('inetOrgPerson', 'organizationalPerson'),

@@ -6,6 +6,7 @@
  * @licence     MIT
  */
 use Jelix\Ldap\LdapClient;
+use Jelix\Ldap\LdapUserManager;
 use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\TestCase;
 
@@ -76,7 +77,7 @@ class ldapad_Test extends TestCase
 
     function testCreateUserWithWeakPassword()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         try {
             $ldap->createUser('testadweak', 'weak', 'weak@tests.jelix', 'Weak Password');
             $this->fail('the creation of a user with a weak password should fail');
@@ -94,7 +95,7 @@ class ldapad_Test extends TestCase
 
     function testCreateUser()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         $this->assertTrue($ldap->createUser('testad', 'Passrobert-123', 'robert@tests.jelix', 'Robert Dupont'));
         // the account is enabled: the search filter excludes disabled accounts
         $this->assertTrue($ldap->userExists('testad'));
@@ -112,7 +113,7 @@ class ldapad_Test extends TestCase
     #[Depends('testCreateUser')]
     function testChangePassword()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         $this->assertTrue($ldap->changePassword('testad', 'Passrobert-456'));
         $this->assertFalse($ldap->verifyAuthentication('testad', 'Passrobert-123'));
         $this->assertIsObject($ldap->verifyAuthentication('testad', 'Passrobert-456'));
@@ -121,7 +122,7 @@ class ldapad_Test extends TestCase
     #[Depends('testChangePassword')]
     function testChangePasswordWithWeakPassword()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         $this->expectException(\Jelix\Ldap\Exception::class);
         $ldap->changePassword('testad', 'weak');
     }
@@ -129,7 +130,7 @@ class ldapad_Test extends TestCase
     #[Depends('testChangePassword')]
     function testUpdateUser()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         $this->assertTrue($ldap->updateUser('testad', array('mail' => 'robert.dupont@tests.jelix')));
         $ldapAttr = $ldap->getUser('testad');
         $this->assertEquals('robert.dupont@tests.jelix', $ldapAttr->userAttributes['email']);
@@ -138,7 +139,7 @@ class ldapad_Test extends TestCase
     #[Depends('testUpdateUser')]
     function testDeleteUser()
     {
-        $ldap = new LdapClient($this->ldapProfile, new TestLogger());
+        $ldap = new LdapUserManager($this->ldapProfile, new TestLogger());
         $ldapAttr = $ldap->deleteUser('testad');
         $this->assertIsObject($ldapAttr);
         $this->assertEquals('CN=Robert Dupont,OU=Guests,DC=ad,DC=jelix', $ldapAttr->dn);

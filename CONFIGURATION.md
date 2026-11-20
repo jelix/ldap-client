@@ -4,7 +4,9 @@ Configuration of the ldap library
 General configuration
 ---------------------
 
-All configuration parameters should be given to the constructor of the `Jelix\Ldap\LdapClient` object.
+All configuration parameters should be given to the constructor of the `Jelix\Ldap\LdapClient` object,
+or of the `Jelix\Ldap\LdapUserManager` object if you want to manage user accounts
+(see [Enable ldap modification features](#enable-ldap-modification-features)).
 
 Example of a such array:
 
@@ -244,6 +246,19 @@ Enable ldap modification features
 The main goal of this library is to authenticate a user against a ldap server. 
 But you may want to use it to manage an LDAP user account: modifying his password, modifying his attributes, deleting it, or to create a new user.
 
+These features are provided by the `Jelix\Ldap\LdapUserManager` class. It inherits
+from `LdapClient`, so it accepts the same parameters and provides also the
+authentication methods (`verifyAuthentication()`, `getUser()`...).
+
+```php
+$ldap = new Jelix\Ldap\LdapUserManager($config);
+$ldap->createUser('bob', 'password', 'bob@example.com', 'Bob Smith');
+```
+
+Parameters described in this section and in the next ones (`feature*` parameters
+of user management, `newUserDN`, `newUserLdapAttributes`, `passwordLdapHashAlgo`,
+`passwordLdapSaltLength`) are used only by `LdapUserManager`. They are ignored by `LdapClient`.
+
 These features are disabled by default. 
 
 To enable these features, you must set `true` to some LDAP parameters:
@@ -338,8 +353,8 @@ the `memberUid` attribute. Use then this filter:
 `'searchGroupFilter' => '(&(objectClass=posixGroup)(memberUid=%%LOGIN%%))'`.
 
 The admin user must have the rights to read users and groups and, if you enable
-modification features, to write into `ou=people`. Remove the `feature*` parameters
-if you only need authentication.
+modification features, to write into `ou=people`. These features need a `LdapUserManager`
+object. Remove the `feature*` parameters and use `LdapClient` if you only need authentication.
 
 Example of configuration for a Microsoft Active Directory server
 ----------------------------------------------------------------
@@ -369,6 +384,8 @@ $config = array(
     // the DN of the found entry is used to verify the password
     'bindAttribute' => 'dn',
 
+    'passwordLdapHashAlgo' => 'AD',
+
     // groups
     'featureGroupLoad' => true,
     'searchGroupBaseDN' => 'DC=corp,DC=example,DC=com',
@@ -396,7 +413,7 @@ Notes:
 
 Active Directory does not support the "Password Modify Extended Operation", and stores
 passwords into the `unicodePwd` attribute. To change passwords and to create users,
-set `passwordLdapHashAlgo` to `AD`, and enable features you need:
+set `passwordLdapHashAlgo` to `AD`, enable features you need, and use a `LdapUserManager` object:
 
 ```php
 $config = array(
