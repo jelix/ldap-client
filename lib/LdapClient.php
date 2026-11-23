@@ -69,8 +69,8 @@ class LdapClient
         'hostname'      =>  'localhost',
         'tlsMode'       => '', // TLS mode: '' (or 'none'), 'starttls', 'ldaps'
         'port'          =>  389, // Port number
-        'adminUserDn'      =>  null, // Admin user DN
-        'adminPassword'      =>  null, // Admin user password
+        'adminUserDn'      => '', // Admin user DN
+        'adminPassword'      => '', // Admin user password
         'protocolVersion'   =>  3,
         'networkTimeout' => 10, // timeout in seconds to connect to the server
         'timeLimit' => 10, // time limit in seconds for search operations
