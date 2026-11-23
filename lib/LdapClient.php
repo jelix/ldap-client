@@ -108,10 +108,16 @@ class LdapClient
      */
     protected $latestErrorCode = 0;
 
+    public const TEST_MODE_OFF = 0;
+    public const TEST_MODE_IGNORE_CONNECTION = 1;
+    public const TEST_MODE_IGNORE_USER_SEARCH = 2;
+    public const TEST_MODE_IGNORE_GROUP_SEARCH = 4;
+
     /**
      * @param array $params configuration parameters
+     * @param int $testMode a combination of TEST_MODE_* constants
      */
-    public function __construct(array $params, ?LoggerInterface $logger = null, $testMode = false)
+    public function __construct(array $params, ?LoggerInterface $logger = null, int $testMode = 0)
     {
         if (!extension_loaded('ldap')) {
             throw new Exception('PHP Ldap extension is not activated', 1);
@@ -139,7 +145,7 @@ class LdapClient
         $this->parameters['tlsMode'] = $tlsMode;
 
         if (!isset($this->parameters['searchUserBaseDN']) || $this->parameters['searchUserBaseDN'] == '') {
-            if ($testMode) {
+            if ($testMode & self::TEST_MODE_IGNORE_USER_SEARCH) {
                 $this->parameters['searchUserBaseDN'] = array();
             }
             else {
@@ -152,7 +158,7 @@ class LdapClient
         }
 
         if (!isset($this->parameters['searchUserFilter']) || $this->parameters['searchUserFilter'] == '') {
-            if ($testMode) {
+            if ($testMode & self::TEST_MODE_IGNORE_USER_SEARCH) {
                 $this->parameters['searchUserFilter'] = array();
             }
             else {
@@ -179,7 +185,7 @@ class LdapClient
 
         $this->parameters['searchAttributes'] = self::parseSearchAttributes($this->parameters['searchAttributes'] ?? '');
 
-        if ($this->parameters['featureGroupLoad'] && !$testMode) {
+        if ($this->parameters['featureGroupLoad'] && !($testMode & self::TEST_MODE_IGNORE_GROUP_SEARCH)) {
             foreach (array('searchGroupFilter', 'searchGroupProperty', 'searchGroupBaseDN') as $name) {
                 if (trim((string) $this->parameters[$name]) === '') {
                     throw new Exception('ldap configuration: '.$name.' config parameter is missing, it is required when featureGroupLoad is enabled', 8);
@@ -187,7 +193,7 @@ class LdapClient
             }
         }
 
-        if ($this->parameters['featureClientTLSCertificate'] && !$testMode) {
+        if ($this->parameters['featureClientTLSCertificate'] && !($testMode & self::TEST_MODE_IGNORE_CONNECTION)) {
             if (trim((string) $this->parameters['clientTLSCertificateFile']) === ''
                 || trim((string) $this->parameters['clientTLSKeyFile']) === ''
             ) {

@@ -75,7 +75,7 @@ class LdapUserManager extends LdapClient
     /**
      * @param array $params configuration parameters
      */
-    public function __construct(array $params, ?LoggerInterface $logger = null, $testMode = false)
+    public function __construct(array $params, ?LoggerInterface $logger = null, int $testMode = 0)
     {
         parent::__construct($params, $logger, $testMode);
 
@@ -117,7 +117,7 @@ class LdapUserManager extends LdapClient
             throw new Exception('ldap configuration: no newUserDN config parameter', 7);
         }
 
-        if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '' && !$testMode) {
+        if ($this->useActiveDirectoryPassword() && $this->parameters['tlsMode'] == '' && !($testMode & self::TEST_MODE_IGNORE_CONNECTION)) {
             throw new Exception('ldap configuration: Active Directory refuses to set passwords on an unencrypted connection. tlsMode should be "starttls" or "ldaps" when passwordLdapHashAlgo is "AD"', 9);
         }
     }
